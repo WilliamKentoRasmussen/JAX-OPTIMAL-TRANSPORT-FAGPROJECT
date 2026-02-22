@@ -19,21 +19,9 @@ import matplotlib.pyplot as plt
 from src.demo_project.data import get_dataloaders
 
 
+training_data = datasets.FashionMNIST(root="data", train=True, download=True, transform=ToTensor())
 
-
-training_data = datasets.FashionMNIST(
-    root="data",
-    train=True,
-    download=True,
-    transform=ToTensor()
-)
-
-test_data = datasets.FashionMNIST(
-    root="data",
-    train=False,
-    download=True,
-    transform=ToTensor()
-)
+test_data = datasets.FashionMNIST(root="data", train=False, download=True, transform=ToTensor())
 
 
 labels_map = {
