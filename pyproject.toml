@@ -27,7 +27,7 @@ dependencies = [
     "numpy>=2.4.2",
     "optax>=0.2.7",
     "pytorch-lightning>=2.6.1",
-    "torch==2.6.0",
+    "torch==2.10.0",
     "torchvision>=0.21.0",
     "typer==0.15.1",
     "uvicorn==0.34.0",
