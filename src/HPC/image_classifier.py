@@ -3,6 +3,8 @@
 # enter password
 #pip install --user uv
 # export PATH=$HOME/.local/bin:$PATH
+# Aktivitetovervågning
+#https://skaftenicki.github.io/dtu_mlops/latest/s1_development_environment/package_manager/
 
 
 import torch
