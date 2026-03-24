@@ -1,5 +1,4 @@
-
-#%%
+# %%
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -23,9 +22,7 @@ loss = eqx.filter_jit(loss)  # JIT our loss function from earlier!
 
 
 @eqx.filter_jit
-def compute_accuracy(
-    model: CNN, x: Float[Array, "batch 1 28 28"], y: Int[Array, " batch"]
-) -> Float[Array, ""]:
+def compute_accuracy(model: CNN, x: Float[Array, "batch 1 28 28"], y: Int[Array, " batch"]) -> Float[Array, ""]:
     """This function takes as input the current model
     and computes the average accuracy on a batch.
     """
@@ -51,16 +48,13 @@ def evaluate(model: CNN, testloader: torch.utils.data.DataLoader):
 
 
 @eqx.filter_jit
-def compute_accuracy(
-    model: CNN, x: Float[Array, "786"], y: Int[Array, " batch"]
-) -> Float[Array, ""]:
+def compute_accuracy(model: CNN, x: Float[Array, "786"], y: Int[Array, " batch"]) -> Float[Array, ""]:
     """This function takes as input the current model
     and computes the average accuracy on a batch.
     """
     pred_y = jax.vmap(model)(x)
     pred_y = jnp.argmax(pred_y, axis=1)
     return jnp.mean(y == pred_y)
-
 
 
 def evaluate_AE(model: CNN, testloader: torch.utils.data.DataLoader):
@@ -76,7 +70,3 @@ def evaluate_AE(model: CNN, testloader: torch.utils.data.DataLoader):
         avg_loss += loss_AE(model, x)
 
     return avg_loss / len(testloader)
-
-
-
-

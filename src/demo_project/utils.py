@@ -7,11 +7,12 @@ from model import CNN
 
 SEED = 5678
 
+
 def loss_AE(model, x):
     x_flat = x.reshape(-1, 784)
     pred = jax.vmap(model)(x_flat)
     bce = jnp.maximum(pred, 0) - pred * x_flat + jnp.log(1 + jnp.exp(-jnp.abs(pred)))
-    return jnp.mean(bce)#jnp.mean((pred - x_flat) ** 2)
+    return jnp.mean(bce)  # jnp.mean((pred - x_flat) ** 2)
 
 
 def loss(model: CNN, x: Float[Array, "batch 1 28 28"], y: Int[Array, " batch"]) -> Float[Array, ""]:
