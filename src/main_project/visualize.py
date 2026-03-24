@@ -1,10 +1,24 @@
 import torch
 import matplotlib.pyplot as plt
+import jax
+import equinox as eqx
+from main_project.model import AEv2
+import jax.random as jr
+import jax.numpy as jnp
+import numpy as np
 from data import getData
+from main_project.train import train,train_step,loss_fn
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 training_data, test_data = getData()
+model = AEv2(key=jr.PRNGKey(0))
+
+# load weights into it
+model = eqx.tree_deserialise_leaves("ae_model.eqx", model)
 
 labels_map = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9"}
+selected_digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def plot_random_samples():
@@ -18,3 +32,63 @@ def plot_random_samples():
         plt.axis("off")
         plt.imshow(img.squeeze(), cmap="gray")
     plt.show()
+
+
+def plot_latent_clusters(
+    training_data,
+    model=model,
+    max_points=5000,   # allow many more points now
+    point_size=8,
+    alpha=0.6
+):
+    # --- Load data ---
+    xs, ys = [], []
+    for img, label in training_data:
+        xs.append(img.numpy())
+        ys.append(label)
+
+    x = jnp.array(xs)
+    labels = jnp.array(ys)
+
+    # Flatten images
+    x = x.reshape(x.shape[0], -1)
+
+    # --- Subsample (but allow more points than before) ---
+    n = len(x)
+    idx = np.random.choice(n, size=min(max_points, n), replace=False)
+
+    x = x[idx]
+    labels = labels[idx]
+
+    # --- Model forward pass ---
+    _, z = jax.vmap(model)(x)
+    z = np.array(z)
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    scatter = ax.scatter(
+        z[:, 0],
+        z[:, 1],
+        c=labels,
+        cmap="tab10",
+        s=point_size,
+        alpha=alpha
+    )
+
+    # --- Styling ---
+    ax.set_xlabel("Latent dimension $z_1$")
+    ax.set_ylabel("Latent dimension $z_2$")
+    ax.set_title("Latent Space Clusters (Colored by Digit)")
+
+    ax.set_aspect('equal')
+
+    # Colorbar instead of legend (cleaner for many points)
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label("Digit")
+
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    plot_latent_clusters(training_data)
