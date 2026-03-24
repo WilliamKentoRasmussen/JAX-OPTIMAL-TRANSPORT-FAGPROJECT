@@ -2,9 +2,38 @@ from typing import Union
 import torch
 import tqdm
 import matplotlib.pyplot as plt
+import jax.numpy as jnp
+import jax
 
 
-def sinkhorn(
+@jax.jit
+def cdist_euclidean_1D(x, y, p: int = 2):
+    diff = y - x
+    if p == 1:
+        return jnp.sum(jnp.abs(diff))
+    return jnp.sum(jnp.abs(diff) ** p) ** (1 / p)
+
+@jax.jit
+def cdist_euclidean(x, y):
+    """Computes pairwise Euclidean distance between rows of x and y."""
+    # (x - y)^2 = x^2 + y^2 - 2xy. Efficiently computed via broadcasting.
+    return jnp.sqrt(jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1))
+
+
+def sinkhorn_jax(x: jax.Array,
+    y: jax.Array,
+    p: float = 2,
+    w_x: Union[jax.Array, None] = None,
+    w_y: Union[jax.Array, None] = None,
+    eps: float = 1e-3,
+    max_iters: int = 100,
+    stop_thresh: float = 1e-5,
+    verbose=False,
+):
+    
+    return 
+
+def sinkhorn_torch(
     x: torch.Tensor,
     y: torch.Tensor,
     p: float = 2,
@@ -23,7 +52,7 @@ def sinkhorn(
     if eps <= 0:
         raise ValueError("Entropy regularization term eps must be > 0")
 
-    if not isinstance(p, int):
+    if not isinstance(max_iters, int):
         raise TypeError(f"max_iters must be an integer > 0, got {max_iters}")
     if max_iters <= 0:
         raise ValueError(f"max_iters must be an integer > 0, got {max_iters}")
@@ -130,7 +159,7 @@ if __name__ == "__main__":
     x = torch.randn(10, 2)
     y = torch.randn(10, 2) + 5.0
 
-    distance, corr_x_to_y, corr_y_to_x = sinkhorn(
+    distance, corr_x_to_y, corr_y_to_x = sinkhorn_torch(
         x, y,
         eps=1e-2,
         verbose=False
@@ -151,6 +180,7 @@ if __name__ == "__main__":
             [x_np[i, 1], y_np[j, 1]],
             'k--', linewidth=0.5
         )
+
 
     plt.legend()
     plt.title("Sinkhorn Correspondences")
