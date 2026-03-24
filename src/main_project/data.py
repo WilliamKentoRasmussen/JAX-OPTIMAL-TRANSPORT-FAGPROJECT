@@ -45,3 +45,6 @@ if __name__ == "__main__":
 #     print("Preprocessing data...")
 #     dataset = MyDataset(data_path)
 #     dataset.preprocess(output_folder)
+if __name__ == "main":
+    training_data, test_data = getData()
+    print(len(training_data),len(test_data))

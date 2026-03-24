@@ -62,12 +62,13 @@ def train(epochs=20):
         print(avg_loss)
         if (epoch + 1) % 10 == 0 or epoch == 0:
             print(f"Epoch {epoch+1}/{epochs} - loss = {epoch_loss}")
+    eqx.tree_serialise_leaves("ae_model.eqx", model)
 
     return model, train_losses
 
 
 if __name__ == "__main__":
-    model, train_losses = print(train(5)[1])
+    model, train_losses = train(epochs=50)
 
     plt.figure(figsize=(8, 5))
     plt.plot(train_losses, label="Train loss")
