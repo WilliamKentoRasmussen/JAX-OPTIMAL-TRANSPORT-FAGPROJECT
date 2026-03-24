@@ -1,13 +1,7 @@
 import jax.numpy as jnp
-from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
-import equinox as eqx
-import jax
 import jax.numpy as jnp
-import optax  # https://github.com/deepmind/optax
 import torch  # https://pytorch.org
 import torchvision  # https://pytorch.org
-from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
 
 
 def numpy_collate(batch):

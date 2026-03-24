@@ -4,12 +4,11 @@ import jax
 import jax.numpy as jnp
 import optax  # https://github.com/deepmind/optax
 import torch  # https://pytorch.org
-import torchvision  # https://pytorch.org
-from jaxtyping import Array, Float, Int, PyTree, Bool  # https://github.com/google/jaxtyping
+from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
 from data import get_dataloaders
 from model import CNN,AE
-from utils import loss, cross_entropy, loss_AE
-from evaluate import compute_accuracy, evaluate, evaluate_AE
+from utils import loss, loss_AE
+from evaluate import evaluate, evaluate_AE
 import matplotlib.pyplot as plt 
 
 

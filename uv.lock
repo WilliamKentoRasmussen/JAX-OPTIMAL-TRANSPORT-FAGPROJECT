@@ -534,6 +534,7 @@ dependencies = [
     { name = "griffecli" },
     { name = "griffelib" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/04/56/28a0accac339c164b52a92c6cfc45a903acc0c174caa5c1713803467b533/griffe-2.0.0.tar.gz", hash = "sha256:c68979cd8395422083a51ea7cf02f9c119d889646d99b7b656ee43725de1b80f", size = 293906, upload-time = "2026-03-23T21:06:53.402Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/94/ee21d41e7eb4f823b94603b9d40f86d3c7fde80eacc2c3c71845476dddaa/griffe-2.0.0-py3-none-any.whl", hash = "sha256:5418081135a391c3e6e757a7f3f156f1a1a746cc7b4023868ff7d5e2f9a980aa", size = 5214, upload-time = "2026-02-09T19:09:44.105Z" },
 ]
@@ -546,6 +547,7 @@ dependencies = [
     { name = "colorama" },
     { name = "griffelib" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/f8/2e129fd4a86e52e58eefe664de05e7d502decf766e7316cc9e70fdec3e18/griffecli-2.0.0.tar.gz", hash = "sha256:312fa5ebb4ce6afc786356e2d0ce85b06c1c20d45abc42d74f0cda65e159f6ef", size = 56213, upload-time = "2026-03-23T21:06:54.8Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/ed/d93f7a447bbf7a935d8868e9617cbe1cadf9ee9ee6bd275d3040fbf93d60/griffecli-2.0.0-py3-none-any.whl", hash = "sha256:9f7cd9ee9b21d55e91689358978d2385ae65c22f307a63fb3269acf3f21e643d", size = 9345, upload-time = "2026-02-09T19:09:42.554Z" },
 ]
@@ -554,6 +556,7 @@ wheels = [
 name = "griffelib"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/06/eccbd311c9e2b3ca45dbc063b93134c57a1ccc7607c5e545264ad092c4a9/griffelib-2.0.0.tar.gz", hash = "sha256:e504d637a089f5cab9b5daf18f7645970509bf4f53eda8d79ed71cce8bd97934", size = 166312, upload-time = "2026-03-23T21:06:55.954Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/51/c936033e16d12b627ea334aaaaf42229c37620d0f15593456ab69ab48161/griffelib-2.0.0-py3-none-any.whl", hash = "sha256:01284878c966508b6d6f1dbff9b6fa607bc062d8261c5c7253cb285b06422a7f", size = 142004, upload-time = "2026-02-09T19:09:40.561Z" },
 ]
@@ -706,6 +709,12 @@ signatures = [
 ]
 
 [[package]]
+name = "keopscore"
+version = "2.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/91/28/94f516c55fca15be37cc75d56f9560d3be5a4badc87ca78202e06dd2d526/keopscore-2.3.tar.gz", hash = "sha256:e8a700c22efee59a7723ed7516c2d88ab143a11290dd23b07eb7bba1c9d16fef", size = 118471, upload-time = "2025-04-17T12:07:37.539Z" }
+
+[[package]]
 name = "kiwisolver"
 version = "1.4.9"
 source = { registry = "https://pypi.org/simple" }
@@ -838,6 +847,9 @@ dependencies = [
     { name = "numpy" },
     { name = "optax" },
     { name = "pandas" },
+    { name = "point-cloud-utils" },
+    { name = "polyscope" },
+    { name = "pykeops" },
     { name = "pytorch-lightning" },
     { name = "scikit-learn" },
     { name = "seaborn" },
@@ -872,6 +884,9 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "optax", specifier = ">=0.2.7" },
     { name = "pandas", specifier = ">=3.0.1" },
+    { name = "point-cloud-utils", specifier = ">=0.34.0" },
+    { name = "polyscope", specifier = ">=2.6.1" },
+    { name = "pykeops", specifier = ">=2.3" },
     { name = "pytorch-lightning", specifier = ">=2.6.1" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
@@ -1542,6 +1557,55 @@ wheels = [
 ]
 
 [[package]]
+name = "point-cloud-utils"
+version = "0.34.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/11/7a/0b72860fa195a2f506698201c7e0f11a7f74bc4e46d42257706af342c749/point_cloud_utils-0.34.0.tar.gz", hash = "sha256:922f326f4c3058cb0b48b32105fb979edb048cb4b8e4f371e92c040365b130c5", size = 46917, upload-time = "2025-04-14T23:33:13.626Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/ee/4a4bf66edc7a1ea59572d48b255496b4c5ec9feef80b056c2e2227256b43/point_cloud_utils-0.34.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:f953b6fe4c23715ba47029ff9d04d6b10d9cd323c8562b587fc22b875dc6680f", size = 8384293, upload-time = "2025-04-14T23:32:50.87Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/63/836346a1e444cd5ec8ee4374645ba7d5a0ee5fda3180434cc55ecb6ed856/point_cloud_utils-0.34.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:8b87b21a5add75f14e23809dc4e3517b23955990bf2d9b170fa6e9972ea2f156", size = 6883955, upload-time = "2025-04-14T23:32:52.242Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/bd/9c0ef0ff44c84270d0cf6eb0843720a39199cb197568e455219232870433/point_cloud_utils-0.34.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b4e5edd7dfc3aba98527b7bc1229d92b0e4d8bb0e6794cc8eec1774ef5d1b785", size = 9764476, upload-time = "2025-04-14T23:32:54.315Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/c9/78e3ba5559114cd3802f01f42f778e064d10153189c0d03d0fd1a54d15cc/point_cloud_utils-0.34.0-cp313-cp313-win_amd64.whl", hash = "sha256:f1793250cb61a6f016ab28980e0fe4ab05378897fec8de6f25b1d489dad5d57a", size = 5425999, upload-time = "2025-04-14T23:32:56.534Z" },
+]
+
+[[package]]
+name = "polyscope"
+version = "2.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f5/dc/622c79b24104da8a8162d21e728e126cf86f8d44e9799d929e1a2ea4bf07/polyscope-2.6.1.tar.gz", hash = "sha256:f7806a951f8a16376adc431300e48f856808ee80ab5cb7597db055cbc3b6ab21", size = 16946275, upload-time = "2026-02-26T23:34:32.265Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/7b/e2f106e4ff9818155abd53e1f9b1feade237a6d201627461ec468f8be2df/polyscope-2.6.1-cp313-cp313-macosx_10_14_x86_64.whl", hash = "sha256:b09955d3c9a867cb361138bc334796a56fa70396dd54960622671ba9ed7cb777", size = 7724100, upload-time = "2026-02-26T23:33:29.197Z" },
+    { url = "https://files.pythonhosted.org/packages/48/e4/946997877e6b65daffee9a93732d83be61ee6b0ee885662761b3d8ac72e5/polyscope-2.6.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:f3aab3920373cda3d3f0bf080641937471cdf5bd0d46cebd6d509a8be6782473", size = 7563606, upload-time = "2026-02-26T23:33:31.718Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/6e/ca9244f2fd527584009b9fd4d103a8e74453cff85e258db181ef91fe315d/polyscope-2.6.1-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d34bf22148e481972bdc5575d7fab3180d07c7c3a14cc6ffdf9e0f0a0bf1466c", size = 8324957, upload-time = "2026-02-26T23:33:33.616Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/08/b87ba04af1e5558d7e6b1cba79e3b3252d0c18c2bb43d38a867bde04ae12/polyscope-2.6.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:997d2d9e5e80e9f2b73d69fae7c46a30d040d1b342845f7c3b3abed22a189ae1", size = 8858835, upload-time = "2026-02-26T23:33:35.449Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/7f/4fbf7316e39d88b07612a600e228f58db3fd9249df109de88dd2ab8967cd/polyscope-2.6.1-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:5c91f7d753af40057b47adf367c180ded65e532f757b4d51c66efe6ff27e386a", size = 9808313, upload-time = "2026-02-26T23:33:38.242Z" },
+    { url = "https://files.pythonhosted.org/packages/83/20/21db6d916ef78414dd4acf1cf995101521b431598e6dffc7cb9445bbd560/polyscope-2.6.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:17129e85d51c7c4913084db22cdff5c3c1f8900996c3618808c0c1c6a525d144", size = 10250268, upload-time = "2026-02-26T23:33:40.583Z" },
+    { url = "https://files.pythonhosted.org/packages/89/43/fb61019fe9d11366ecf498c786f0ba38255421bba50c54d12150b0df693f/polyscope-2.6.1-cp313-cp313-win_amd64.whl", hash = "sha256:50e5a774bfb427fd63f3353292397a3c093b77dd4bf1c2d64e4019f89b6d5a96", size = 9938658, upload-time = "2026-02-26T23:33:42.899Z" },
+    { url = "https://files.pythonhosted.org/packages/82/44/e71d8820f656dd3d01df69be63500afae07ffc0c13ed89ba3b75b162c458/polyscope-2.6.1-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:65f18063eebc018f72691b46a3d44adfbfb79efce4058cb1afd3a08ac4dafdb5", size = 7724600, upload-time = "2026-02-26T23:33:45.136Z" },
+    { url = "https://files.pythonhosted.org/packages/09/4d/95e9fc4554635b2c6984fe7003e86f7502f132c3d63212130844f91dccdc/polyscope-2.6.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:a3d5209ad6f9ac910442df026fba5517d9177e0f06b2685e233cae5e3cef33a4", size = 7563691, upload-time = "2026-02-26T23:33:46.876Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/fc/53b6135a978d0ef4b8b6358b122a7ee5161f33732ddc01bfa56b2bd58a96/polyscope-2.6.1-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ba32deca0b1a87d933aa5964059c25ad151a07f5a7ca164a5e435876b770f71e", size = 8325611, upload-time = "2026-02-26T23:33:48.906Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/03/fe567601abc012b5baa93bc596853135eba4c597f8b8a2b5d8ad86e756f7/polyscope-2.6.1-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7494b7da2fee2d1f6511b5d95543a41c1221ebd22bf72a78acf07623ea4fdb8c", size = 8859144, upload-time = "2026-02-26T23:33:50.851Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/dd/14964cdf4a6336938e11822abbe9f756bd8b495f09b31316e35bbcd1f289/polyscope-2.6.1-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:57c67b84c232fca8e2cab5d0f5f1dc1b4a24e4a5b324c2bbdc13048b7d9315b3", size = 9808537, upload-time = "2026-02-26T23:33:53.102Z" },
+    { url = "https://files.pythonhosted.org/packages/51/b0/17a4c0fa879692430f937ecbb3427e06dddd19390d26a107355545bb6784/polyscope-2.6.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:ce451d7c77860944877ea42bc1d8e4a959968f9b61355075150cc7c51c18f9cf", size = 10250955, upload-time = "2026-02-26T23:33:55.588Z" },
+    { url = "https://files.pythonhosted.org/packages/12/96/63506b65eb7bdf3ce7f4cfab4d30b0017eb48dc9464fadc051015508a937/polyscope-2.6.1-cp314-cp314-win_amd64.whl", hash = "sha256:3dee233aa9e8d1d7034f052f28a8dfa0c48f563da47aa02f1a9842f94638d89b", size = 10094458, upload-time = "2026-02-26T23:33:58.057Z" },
+    { url = "https://files.pythonhosted.org/packages/33/50/0db33586428032d3101a3813440b6d80170b91a159f210c1f520917aa805/polyscope-2.6.1-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:621599eadee068f7651df727f7860c3b5d1e6cbbae94bbacb2fff7d1c2acefc4", size = 7736026, upload-time = "2026-02-26T23:34:00.594Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/a6/c4d447b7651abe7db2e203834d0eab15a1472cb895ad0d9d7ee013a9214a/polyscope-2.6.1-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:9c30168e49192b8323f56793cb333dc1ab418f20ea1830330385969c2cd4fdb0", size = 7571461, upload-time = "2026-02-26T23:34:02.77Z" },
+    { url = "https://files.pythonhosted.org/packages/65/5a/372346f5c6f189aed1a8e7980b06630f12abe74c06a0c34ac6d4e581d165/polyscope-2.6.1-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c4f2c729d0ec325c8379a14caedd78c2ad4067c63e3aa3ed30da8872202a5c49", size = 8339326, upload-time = "2026-02-26T23:34:04.948Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/88/6e55200e76ad3358d1edf9e84dce4ab6c687c67eb412a0def78583c13f7b/polyscope-2.6.1-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:bf8080a1222d2e1dee796e59eabb5fc70e37535e2ddf17b1a9a9d1819ece0e97", size = 8873826, upload-time = "2026-02-26T23:34:06.846Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/da/06efd908898fce870ef1f058ac80f35c96379a478f27eb707f2d583fb2da/polyscope-2.6.1-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:8400c1a23a79750df049c42b4ba5876767a07ff12b11eb72acc5874ea16a5a10", size = 9825762, upload-time = "2026-02-26T23:34:08.911Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/1c/ad5f7c591198ce0405604edf3b40d2628d68871a3298c36f6c66ce3d2819/polyscope-2.6.1-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:6046b718bda5db995ad769824e5c785713e5f8ea53894706091ec57c033a160f", size = 10262814, upload-time = "2026-02-26T23:34:11.07Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/00/fceab71136a0cc8e64aa3a6c99371ce1c799a08093c9b3dd29a209b19f5e/polyscope-2.6.1-cp314-cp314t-win_amd64.whl", hash = "sha256:b62e09ab2beaa5dae44acd165ce25a301d4df16f9daca46cbe2cd488d327efe1", size = 10133788, upload-time = "2026-02-26T23:34:13.668Z" },
+]
+
+[[package]]
 name = "pre-commit"
 version = "4.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1627,6 +1691,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pybind11"
+version = "3.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a5/98/9118a0659646f1628c592ef9bb48e0056efa6bf27c951fd12a178e0136fb/pybind11-3.0.2.tar.gz", hash = "sha256:432f01aeb68e361a3a7fc7575c2c7f497595bf640f747acd909ff238dd766e06", size = 577131, upload-time = "2026-02-17T04:46:52.556Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/88/c5/e98d9c51f3d5300d5e40ad9037dd6b3b60736fd02ab68dcc98c96be7592d/pybind11-3.0.2-py3-none-any.whl", hash = "sha256:f8a6500548919cc33bcd220d5f984688326f574fa97f1107f2f4fdb4c6fb019f", size = 310158, upload-time = "2026-02-17T04:46:49.91Z" },
+]
+
+[[package]]
 name = "pydantic"
 version = "2.12.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1702,6 +1775,17 @@ sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b014
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217, upload-time = "2025-06-21T13:39:07.939Z" },
 ]
+
+[[package]]
+name = "pykeops"
+version = "2.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "keopscore" },
+    { name = "numpy" },
+    { name = "pybind11" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3b/e1/3bb0af9916632e712cc0b0326679647d7452e626811dbc2b15b277add460/pykeops-2.3.tar.gz", hash = "sha256:458fa77985efd2161be9c719e8dd41e495526cd735d3262aec09902505f5bdba", size = 552155, upload-time = "2025-04-17T12:07:25.927Z" }
 
 [[package]]
 name = "pymdown-extensions"

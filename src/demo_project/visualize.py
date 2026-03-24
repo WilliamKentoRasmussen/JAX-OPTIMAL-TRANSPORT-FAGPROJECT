@@ -1,18 +1,10 @@
 import matplotlib.pyplot as plt
 import torch
-from torch.utils.data import Dataset
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 
-import equinox as eqx
-import jax
-import jax.numpy as jnp
-import optax  # https://github.com/deepmind/optax
 import torch  # https://pytorch.org
-import torchvision  # https://pytorch.org
-from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
 import torch
-from torch.utils.data import Dataset
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 import matplotlib.pyplot as plt
@@ -49,7 +41,6 @@ for i in range(1, cols * rows + 1):
     plt.imshow(img.squeeze(), cmap="gray")
 plt.show()
 
-from torch.utils.data import DataLoader
 
 train_dataloader, test_dataloader = get_dataloaders(batch_size=64)
 
