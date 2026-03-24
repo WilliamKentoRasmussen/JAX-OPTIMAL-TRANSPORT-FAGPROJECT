@@ -3,13 +3,10 @@
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import optax  # https://github.com/deepmind/optax
 import torch  # https://pytorch.org
-import torchvision  # https://pytorch.org
-from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
-from data import get_dataloaders
+from jaxtyping import Array, Float, Int  # https://github.com/google/jaxtyping
 from model import CNN
-from utils import loss, cross_entropy, loss_AE
+from utils import loss, loss_AE
 
 # Hyperparameters
 

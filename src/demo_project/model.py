@@ -2,15 +2,7 @@
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import optax  # https://github.com/deepmind/optax
-import torch  # https://pytorch.org
-import torchvision  # https://pytorch.org
-from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
-from data import get_dataloaders
-import torch
-from torch import nn, optim
-from torchvision import datasets, transforms
-import matplotlib.pyplot as plt
+from jaxtyping import Array, Float  # https://github.com/google/jaxtyping
 
 
 SEED = 5678

@@ -1,7 +1,5 @@
-from pathlib import Path
 
-import typer
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 from torchvision import datasets
 

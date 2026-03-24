@@ -2,19 +2,19 @@ import json
 from main_project.model import AEv2
 from main_project.train import train
 import equinox as eqx
-import jax
-import jax.numpy as jnp
 import jax.random as jr
 import os
 hyperparamters = {}
 
-def save(filename, model):
+def save(model, name = "model", path = "models"):
+    filename = path + "/" + name + ".eqx"
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename, "wb") as f:
         eqx.tree_serialise_leaves(f, model)
 
 
-def load(filename):
+def load(name = "model",path="models"):
+    filename = path + "/" + name + ".eqx"
     with open(filename, "rb") as f:
         
         model = AEv2(key=jr.PRNGKey(0))
@@ -36,6 +36,6 @@ def load_with_hyperparams(filename):
 if __name__ == "__main__":
 
     model, train_losses = train(1)
-    save("../models/model.eqx", model)
-    newmodel = load("../models/model.eqx")
-    assert model.encoder.layers[1].weight[2, 2] == newmodel.encoder.layers[1].weight[2, 2]
+    save("models/model.eqx", model)
+    newmodel = load("models/model.eqx")
+    assert model.encoder.layers[0].weight[2, 2] == newmodel.encoder.layers[0].weight[2, 2]
