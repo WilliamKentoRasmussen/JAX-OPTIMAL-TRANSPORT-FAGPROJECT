@@ -156,8 +156,8 @@ def sinkhorn_torch(
 
 
 if __name__ == "__main__":
-    x = torch.randn(10, 2)
-    y = torch.randn(10, 2) + 5.0
+    x = torch.randn(10, 2) # (0,0)
+    y = torch.randn(10, 2) + 5.0  # (5,5)
 
     distance, corr_x_to_y, corr_y_to_x = sinkhorn_torch(
         x, y,
