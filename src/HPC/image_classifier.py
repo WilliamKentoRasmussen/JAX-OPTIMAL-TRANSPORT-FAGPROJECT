@@ -1,10 +1,10 @@
 # Run it using https://www.hpc.dtu.dk/?page_id=2501
 # ssh s245310@login2.hpc.dtu.dk
 # enter password
-#pip install --user uv
+# pip install --user uv
 # export PATH=$HOME/.local/bin:$PATH
 # Aktivitetovervågning
-#https://skaftenicki.github.io/dtu_mlops/latest/s1_development_environment/package_manager/
+# https://skaftenicki.github.io/dtu_mlops/latest/s1_development_environment/package_manager/
 
 
 import torch
@@ -95,8 +95,6 @@ def cli_main() -> None:
         run=False,
         trainer_defaults={"max_epochs": 20},
     )
-
-
 
     cli.trainer.fit(cli.model, datamodule=cli.datamodule)
     cli.trainer.test(ckpt_path="best", datamodule=cli.datamodule)

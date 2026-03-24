@@ -1,4 +1,4 @@
-#%%
+# %%
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -6,17 +6,16 @@ import optax  # https://github.com/deepmind/optax
 import torch  # https://pytorch.org
 from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
 from data import get_dataloaders
-from model import CNN,AE
+from model import CNN, AE
 from utils import loss, loss_AE
 from evaluate import evaluate, evaluate_AE
-import matplotlib.pyplot as plt 
-
+import matplotlib.pyplot as plt
 
 
 # Hyperparameters
 
 BATCH_SIZE = 64
-LEARNING_RATE = 1e-3#3e-4
+LEARNING_RATE = 1e-3  # 3e-4
 STEPS = 1000
 PRINT_EVERY = 100
 SEED = 5678
@@ -33,8 +32,9 @@ output = jax.vmap(model)(dummy_x)
 print(output.shape)  # batch of predictions
 """
 
-#%%
+# %%
 optim = optax.adamw(LEARNING_RATE)
+
 
 def train(
     model: CNN,
@@ -59,9 +59,7 @@ def train(
         y: Int[Array, " batch"],
     ):
         loss_value, grads = eqx.filter_value_and_grad(loss)(model, x, y)
-        updates, opt_state = optim.update(
-            grads, opt_state, eqx.filter(model, eqx.is_array)
-        )
+        updates, opt_state = optim.update(grads, opt_state, eqx.filter(model, eqx.is_array))
         model = eqx.apply_updates(model, updates)
         return model, opt_state, loss_value
 
@@ -84,7 +82,9 @@ def train(
             )
     return model
 
-#%%
+
+# %%
+
 
 def train_AE(
     model: AE,
@@ -108,9 +108,7 @@ def train_AE(
         x: Float[Array, "784"],
     ):
         loss_value, grads = eqx.filter_value_and_grad(loss_AE)(model, x)
-        updates, opt_state = optim.update(
-            grads, opt_state, eqx.filter(model, eqx.is_array)
-        )
+        updates, opt_state = optim.update(grads, opt_state, eqx.filter(model, eqx.is_array))
         model = eqx.apply_updates(model, updates)
         return model, opt_state, loss_value
 
@@ -127,12 +125,8 @@ def train_AE(
         model, opt_state, train_loss = make_step(model, opt_state, x)
         if (step % print_every) == 0 or (step == steps - 1):
             test_loss = evaluate_AE(model, testloader)
-            print(
-                f"{step=}, train_loss={train_loss.item()}, "
-                f"test_loss={test_loss.item()}"
-            )
+            print(f"{step=}, train_loss={train_loss.item()}, " f"test_loss={test_loss.item()}")
     return model
-
 
 
 USE_CNN: bool = False
@@ -156,10 +150,10 @@ if __name__ == "__main__":
 
         fig, axes = plt.subplots(nrows=2, ncols=10, figsize=(10, 3))
         for i in range(10):
-            axes[0, i].imshow(images_np[i].reshape(28, 28), cmap='gray')
-            axes[0, i].axis('off')
-            axes[1, i].imshow(jnp.array(reconstructed[i]).reshape(28, 28), cmap='gray')
-            axes[1, i].axis('off')
+            axes[0, i].imshow(images_np[i].reshape(28, 28), cmap="gray")
+            axes[0, i].axis("off")
+            axes[1, i].imshow(jnp.array(reconstructed[i]).reshape(28, 28), cmap="gray")
+            axes[1, i].axis("off")
         plt.show()
 
         print(f"\n\nFinal test loss = {test_loss}")

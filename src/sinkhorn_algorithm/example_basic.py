@@ -12,7 +12,7 @@ if __name__ == "__main__":
     np.random.seed(1234567)
 
     niters = 500
-    device = 'cuda'
+    device = "cuda"
     dtype = torch.float32
     eps = 1e-3
     stop_error = 1e-3
@@ -31,20 +31,20 @@ if __name__ == "__main__":
 
     print("Running Sinkhorn...")
     sinkhorn_start_time = time.time()
-    loss, corrs_1_to_2, corrs_2_to_1 = \
-        sinkhorn(p1, p2, p=2, eps=eps, max_iters=niters, stop_thresh=stop_error, verbose=True)
+    loss, corrs_1_to_2, corrs_2_to_1 = sinkhorn(
+        p1, p2, p=2, eps=eps, max_iters=niters, stop_thresh=stop_error, verbose=True
+    )
     torch.cuda.synchronize()
     print(f"Done in {time.time() - sinkhorn_start_time}s")
 
     print(f"Sinkhorn loss is {loss.item()}")
 
     ps.init()
-    edges = torch.stack([torch.arange(p1.shape[0]).to(corrs_1_to_2),
-                         corrs_1_to_2 + p1.shape[0]], dim=-1).cpu().numpy()
+    edges = torch.stack([torch.arange(p1.shape[0]).to(corrs_1_to_2), corrs_1_to_2 + p1.shape[0]], dim=-1).cpu().numpy()
     verts = torch.cat([p1, p2], dim=0).cpu().numpy()
     p1 = p1.cpu().numpy()
     p2 = p2.cpu().numpy()
     ps.register_point_cloud("p1", p1)
     ps.register_point_cloud("p2", p2)
-    ps.register_curve_network("corr1", verts, edges[::200]) # Only plot 100 for easier viz
+    ps.register_curve_network("corr1", verts, edges[::200])  # Only plot 100 for easier viz
     ps.show()

@@ -1,27 +1,16 @@
-
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 from torchvision import datasets
 
-def getData():
-    training_data = datasets.MNIST(
-        root="data", 
-        train = True, 
-        download= True, 
-        transform = ToTensor()
-    )
 
-    test_data = datasets.MNIST(
-        root='data',
-        train=False, 
-        download= True, 
-        transform=ToTensor()
-    )
+def getData():
+    training_data = datasets.MNIST(root="data", train=True, download=True, transform=ToTensor())
+
+    test_data = datasets.MNIST(root="data", train=False, download=True, transform=ToTensor())
     return training_data, test_data
 
 
 def getDataloaders() -> DataLoader:
-
     training_data, test_data = getData()
 
     train_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
@@ -32,14 +21,8 @@ def getDataloaders() -> DataLoader:
 
 if __name__ == "__main__":
     train_dataloader, test_dataloader = getDataloaders()
-    dummy_x,dummy_y = next(iter(train_dataloader))
+    dummy_x, dummy_y = next(iter(train_dataloader))
     print(dummy_x.size(), dummy_y.size())
-
-
-
-
-
-
 
 
 # class MyDataset(Dataset):
@@ -62,4 +45,3 @@ if __name__ == "__main__":
 #     print("Preprocessing data...")
 #     dataset = MyDataset(data_path)
 #     dataset.preprocess(output_folder)
-
