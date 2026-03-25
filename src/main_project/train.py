@@ -8,6 +8,7 @@ import jax.random as jr
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold, cross_val_score
 from torch.utils.data import DataLoader, Subset
+from main_project.utils import save
 
 seed = 3456
 key = jax.random.PRNGKey(seed)
@@ -48,7 +49,9 @@ def train(epochs=20, k=10):
     training_data, test_data = getData()
     cv = KFold(n_splits=k, shuffle=True, random_state=42)
     
+    
     fold_results = []
+    test_results = []
     
     for fold, (train_idx, val_idx) in enumerate(cv.split(training_data)):
         print(f"=== Fold {fold+1}/{k} ===")
@@ -98,22 +101,26 @@ def train(epochs=20, k=10):
             
             print(f"Epoch {epoch+1}/{epochs} - train_loss: {avg_train_loss:.4f}, val_loss: {avg_val_loss:.4f}")
         
-        # Save model for this fold
-        eqx.tree_serialise_leaves(f"ae_model_fold{fold+1}.eqx", model)
+        save(model=model,name = f"model {fold}")
+        
         
         # Store fold validation result
         fold_results.append(avg_val_loss)
+        test_results.append(val_step(model,test_data))
+
     
     # Print cross-validated performance
     print(f"Average validation loss across {k} folds: {sum(fold_results)/k:.4f}")
+    return fold_results,test_results
+    
 
 
 if __name__ == "__main__":
-    model, train_losses = train(epochs=10)
+    fold_results,test_results = train(epochs=10)
 
     plt.figure(figsize=(8, 5))
-    plt.plot(train_losses, label="Train loss")
-    plt.xlabel("Epoch")
+    plt.plot(fold_results, label="Train loss")
+    plt.xlabel("Fold")
     plt.ylabel("MSE Loss")
     plt.title("Autoencoder Training Loss")
     plt.legend()
