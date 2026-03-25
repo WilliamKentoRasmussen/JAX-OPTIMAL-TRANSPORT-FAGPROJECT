@@ -11,15 +11,12 @@ from main_project.train import train,train_step,loss_fn
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import sklearn
+from main_project.utils import load
 
 training_data, test_data = getData()
-model = AEv2(key=jr.PRNGKey(0))
 
-# load weights into it
-model = eqx.tree_deserialise_leaves("ae_model.eqx", model)
+model = load(name="model", path="models")
 
-labels_map = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9"}
-selected_digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def plot_random_samples():
