@@ -1,6 +1,7 @@
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 from torchvision import datasets
+from sklearn.model_selection import KFold, cross_val_score
 
 
 def getData():
@@ -10,17 +11,15 @@ def getData():
     return training_data, test_data
 
 
-def getDataloaders() -> DataLoader:
-    training_data, test_data = getData()
+def getDataloader(data) -> DataLoader:
 
-    train_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
-    test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
-
-    return train_dataloader, test_dataloader
+    dataloader = DataLoader(data, batch_size=64, shuffle=True)
+    return dataloader
 
 
 if __name__ == "__main__":
-    train_dataloader, test_dataloader = getDataloaders()
+    training_data,test_data = getData()
+    train_dataloader, test_dataloader = getDataloader(training_data),getDataloader(test_data)
     dummy_x, dummy_y = next(iter(train_dataloader))
     print(dummy_x.size(), dummy_y.size())
 
