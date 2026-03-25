@@ -10,6 +10,7 @@ from data import getData
 from main_project.train import train,train_step,loss_fn
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import sklearn
 
 training_data, test_data = getData()
 model = AEv2(key=jr.PRNGKey(0))
