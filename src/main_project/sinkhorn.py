@@ -6,6 +6,54 @@ import jax.numpy as jnp
 import jax
 
 
+
+def sinkhorn_simple(s: jax.Array,
+    d: jax.Array,
+    C: jax.Array,
+    gamma: float = 0.1,
+    eps: float = 1e-3,
+    max_iters: int = 100,
+    stop_thresh: float = 1e-5,
+    verbose=False,
+):
+    u, v = jnp.ones_like(s), jnp.ones_like(d)
+    K = jnp.exp(-C/gamma)
+    for i in range(max_iters):
+        u_prev = u
+        v_prev = v
+        u = s / jnp.dot(K,v)
+        v = d / jnp.dot(K.T,u)
+        
+        if jnp.max(jnp.abs(u_prev-u)) < stop_thresh and jnp.max(jnp.abs(v_prev-v)) < stop_thresh:
+            break
+    
+    rows, columns = K.shape
+    T = jnp.zeros((rows,columns))
+
+    T = (u[:, None]) * K * (v[None, :])
+    #for i in range(rows):
+    #    for j in range(columns): 
+    #        T[i][j] = u[i]*K[i][j]*v[j]
+    
+    return T
+
+s = jnp.array([0.1,0.35, 0.40,0.15])
+d = jnp.array([0.2,0.25, 0.30,0.25])
+
+C = jnp.array([
+    [0.3,5, 40,1],
+    [0.2,35, 0.40,15],
+    [0.5,45, 1,5],
+    [0.1,2, 10,15]
+])
+    
+if __name__ == "__main__":
+    gamma = 0.2
+    T = sinkhorn_simple(s,d,C,gamma=gamma) 
+    print(T.sum(axis=1), " should equal:", s)
+    print(T.sum(axis=0),  " should equal:", d)
+    print(T)
+
 @jax.jit
 def cdist_euclidean_1D(x, y, p: int = 2):
     diff = y - x
@@ -18,6 +66,8 @@ def cdist_euclidean(x, y):
     """Computes pairwise Euclidean distance between rows of x and y."""
     # (x - y)^2 = x^2 + y^2 - 2xy. Efficiently computed via broadcasting.
     return jnp.sqrt(jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1))
+
+
 
 
 def sinkhorn_jax(x: jax.Array,
