@@ -1,6 +1,5 @@
 import json
 from main_project.model import AEv2
-from main_project.train import train
 import equinox as eqx
 import jax.random as jr
 import os
