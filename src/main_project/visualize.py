@@ -7,11 +7,13 @@ import jax.random as jr
 import jax.numpy as jnp
 import numpy as np
 from data import getData
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from main_project.utils import load
 
 training_data, test_data = getData()
+loss_data = pd.read_csv("data/training_history.csv")
 
 model = load(name="ae_best_model", path="models")
 labels_map = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9"}
@@ -132,6 +134,17 @@ def plot_reconstruction(training_data, model, n_examples=10):
     plt.tight_layout()
     plt.show()
 
+def plot_training_loss(data):
+    plt.figure(figsize=(12, 6))
+    plt.plot(data['epoch'], data['train_loss'], label='Training Loss', color='blue')
+    plt.plot(data['epoch'], data['val_loss'], label='Validation Loss', color='orange')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Loss over Epochs')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 
 
 
@@ -139,4 +152,4 @@ def plot_reconstruction(training_data, model, n_examples=10):
 
 
 if __name__ == "__main__":
-    plot_latent_clusters(training_data,model)
+    plot_training_loss(loss_data)
