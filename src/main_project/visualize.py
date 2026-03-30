@@ -139,4 +139,4 @@ def plot_reconstruction(training_data, model, n_examples=10):
 
 
 if __name__ == "__main__":
-    plot_random_samples()
+    plot_latent_clusters(training_data,model)
