@@ -16,11 +16,10 @@ seed = 3456
 key = jax.random.PRNGKey(seed)
 key, subkey = jax.random.split(key, 2)
 
-epochs = 20
-lambda_l2 = 0.5  # [0, 0.01, 10]
+lambda_l2 = 0.001  # [0, 0.01, 10]
 optimizer = optax.adam(learning_rate=1e-4)
 
-
+@eqx.filter_jit
 def loss_fn(model, x):
     recon, z = jax.vmap(model)(x)
 
@@ -33,12 +32,13 @@ def loss_fn(model, x):
     return loss
 
 
-# @eqx.filter_jit
+@eqx.filter_jit
 def train_step(model, opt_state, x):
     loss, grads = eqx.filter_value_and_grad(loss_fn)(model, x)
     updates, opt_state = optimizer.update(grads, opt_state, params=eqx.filter(model, eqx.is_array))
     model = eqx.apply_updates(model, updates)
     return model, opt_state, loss
+@eqx.filter_jit
 def val_step(model, x):
     return loss_fn(model, x)
 def evaluate(model, dataloader):
@@ -54,8 +54,6 @@ def evaluate(model, dataloader):
         num_batches += 1
 
     return total_loss / num_batches
-
-
 
 
 

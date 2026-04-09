@@ -153,3 +153,5 @@ def plot_training_loss(data):
 
 if __name__ == "__main__":
     plot_training_loss(loss_data)
+    plot_reconstruction(training_data, model)
+    plot_latent_clusters(training_data, model)
