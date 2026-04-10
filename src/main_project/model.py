@@ -13,13 +13,13 @@ class AEv2(eqx.Module):
         self.encoder = eqx.nn.Sequential(
             (
                 eqx.nn.Linear(28 * 28, 256, key=key_splt[0]),
-                eqx.nn.Lambda(jax.nn.relu),
+                eqx.nn.Lambda(jax.nn.leaky_relu),
                 eqx.nn.Linear(256, 128, key=key_splt[1]),
-                eqx.nn.Lambda(jax.nn.relu),
+                eqx.nn.Lambda(jax.nn.leaky_relu),
                 eqx.nn.Linear(128, 64, key=key_splt[2]),
-                eqx.nn.Lambda(jax.nn.relu),
+                eqx.nn.Lambda(jax.nn.leaky_relu),
                 eqx.nn.Linear(64, 32, key=key_splt[3]),
-                eqx.nn.Lambda(jax.nn.relu),
+                eqx.nn.Lambda(jax.nn.leaky_relu),
                 eqx.nn.Linear(32, latent_dim, key=key_splt[4]),
             )
         )
@@ -27,13 +27,13 @@ class AEv2(eqx.Module):
         self.decoder = eqx.nn.Sequential(
             (
                 eqx.nn.Linear(latent_dim, 32, key=key_splt[5]),
-                eqx.nn.Lambda(jax.nn.relu),
+                eqx.nn.Lambda(jax.nn.leaky_relu),
                 eqx.nn.Linear(32, 64, key=key_splt[6]),
-                eqx.nn.Lambda(jax.nn.relu),
+                eqx.nn.Lambda(jax.nn.leaky_relu),
                 eqx.nn.Linear(64, 128, key=key_splt[7]),
-                eqx.nn.Lambda(jax.nn.relu),
+                eqx.nn.Lambda(jax.nn.leaky_relu),
                 eqx.nn.Linear(128, 256, key=key_splt[8]),
-                eqx.nn.Lambda(jax.nn.relu),
+                eqx.nn.Lambda(jax.nn.leaky_relu),
                 eqx.nn.Linear(256, 28 * 28, key=key_splt[9]),
                 eqx.nn.Lambda(jax.nn.sigmoid),
             )
