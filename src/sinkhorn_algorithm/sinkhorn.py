@@ -10,7 +10,7 @@ def sinkhorn(
     p: float = 2,
     w_x: Union[torch.Tensor, None] = None,
     w_y: Union[torch.Tensor, None] = None,
-    eps: float = 1e-3,
+    alpha: float = 1e-3,
     max_iters: int = 100,
     stop_thresh: float = 1e-5,
     verbose=False,
@@ -41,8 +41,8 @@ def sinkhorn(
     if p <= 0:
         raise ValueError(f"p must be an integer greater than 0, got {p}")
 
-    if eps <= 0:
-        raise ValueError("Entropy regularization term eps must be > 0")
+    if alpha <= 0:
+        raise ValueError("Entropy regularization term alpha must be > 0")
 
     if not isinstance(p, int):
         raise TypeError(f"max_iters must be an integer > 0, got {max_iters}")
@@ -124,7 +124,7 @@ def sinkhorn(
 
     # Initialize the iteration with the change of variable
     u = torch.zeros_like(w_x)
-    v = eps * torch.log(w_y)
+    v = alpha * torch.log(w_y)
 
     u_i = keops.Vi(u.unsqueeze(-1))
     v_j = keops.Vj(v.unsqueeze(-1))
@@ -138,12 +138,12 @@ def sinkhorn(
         u_prev = u
         v_prev = v
 
-        summand_u = (-M_ij + v_j) / eps
-        u = eps * (log_a - summand_u.logsumexp(dim=1).squeeze())
+        summand_u = (-M_ij + v_j) / alpha
+        u = alpha * (log_a - summand_u.logsumexp(dim=1).squeeze())
         u_i = keops.Vi(u.unsqueeze(-1))
 
-        summand_v = (-M_ij + u_i) / eps
-        v = eps * (log_b - summand_v.logsumexp(dim=0).squeeze())
+        summand_v = (-M_ij + u_i) / alpha
+        v = alpha * (log_b - summand_v.logsumexp(dim=0).squeeze())
         v_j = keops.Vj(v.unsqueeze(-1))
 
         max_err_u = torch.max(torch.abs(u_prev - u))
@@ -155,7 +155,7 @@ def sinkhorn(
             break
 
     # Build final transport plan
-    P_ij = ((-M_ij + u_i + v_j) / eps).exp()
+    P_ij = ((-M_ij + u_i + v_j) / alpha).exp()
 
     approx_corr_1 = P_ij.argmax(dim=1).squeeze(-1)
     approx_corr_2 = P_ij.argmax(dim=0).squeeze(-1)
@@ -165,4 +165,4 @@ def sinkhorn(
         distance = (P_ij * M_ij).sum(dim=1).sum()
     else:
         distance = (P_ij * M_ij).sum(dim=0).sum()
-    return distance, approx_corr_1, approx_corr_2
+    return distance, approx_corr_1, approx_corr_2,u,v
