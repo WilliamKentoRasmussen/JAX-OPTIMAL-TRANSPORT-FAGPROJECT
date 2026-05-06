@@ -166,3 +166,5 @@ def sinkhorn(
     else:
         distance = (P_ij * M_ij).sum(dim=0).sum()
     return distance, approx_corr_1, approx_corr_2,u,v
+
+def sinkhorn()
