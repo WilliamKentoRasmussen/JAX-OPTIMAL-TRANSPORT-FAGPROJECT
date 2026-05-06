@@ -37,6 +37,8 @@ def sinkhorn_simple(s: jax.Array,
     
     return T
 
+
+
 s = jnp.array([0.1,0.35, 0.40,0.15])
 d = jnp.array([0.2,0.25, 0.30,0.25])
 
@@ -50,9 +52,36 @@ C = jnp.array([
 if __name__ == "__main__":
     gamma = 0.2
     T = sinkhorn_simple(s,d,C,gamma=gamma) 
+
     print(T.sum(axis=1), " should equal:", s)
     print(T.sum(axis=0),  " should equal:", d)
     print(T)
+
+    new = jnp.array([1,1,1,1]) 
+    projected_new = jnp.zeros_like(new) 
+
+    for row in C:
+        d = cdist_euclidean(row, new)
+        projected_new = row*d
+
+    transported_new = projected_new@T
+    
+    new_np = new.detach().cpu().numpy()
+    transported_new_np = transported_new.detach().cpu().numpy()
+
+    plt.scatter(new_np, label="x (source)")
+    plt.scatter(transported_new, label="y (target)")
+
+
+
+@jax.jit
+def cdist_euclidean(x, y):
+    """Computes pairwise Euclidean distance between rows of x and y."""
+    # (x - y)^2 = x^2 + y^2 - 2xy. Efficiently computed via broadcasting.
+    return jnp.sqrt(jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1))
+
+
+
 
 @jax.jit
 def cdist_euclidean_1D(x, y, p: int = 2):
@@ -60,12 +89,6 @@ def cdist_euclidean_1D(x, y, p: int = 2):
     if p == 1:
         return jnp.sum(jnp.abs(diff))
     return jnp.sum(jnp.abs(diff) ** p) ** (1 / p)
-
-@jax.jit
-def cdist_euclidean(x, y):
-    """Computes pairwise Euclidean distance between rows of x and y."""
-    # (x - y)^2 = x^2 + y^2 - 2xy. Efficiently computed via broadcasting.
-    return jnp.sqrt(jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1))
 
 
 
