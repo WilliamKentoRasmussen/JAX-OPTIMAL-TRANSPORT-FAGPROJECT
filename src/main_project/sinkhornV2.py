@@ -48,8 +48,8 @@ def sinkhorn_simple(
 
     for i in range(max_iters):
         u_prev, v_prev = u, v
-        u = s / jnp.dot(K, v)
-        v = d / jnp.dot(K.T, u)
+        u = s / (jnp.dot(K, v) + 1e-8)
+        v = d / (jnp.dot(K.T, u) + 1e-8)
 
         if (
             jnp.max(jnp.abs(u_prev - u)) < stop_thresh
@@ -61,7 +61,26 @@ def sinkhorn_simple(
 
     # Outer product scaling: T[i,j] = u[i] * K[i,j] * v[j]
     T = u[:, None] * K * v[None, :]
-    return T
+    return T,u,v
+
+def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000,stop_thresh = 1e-5,verbose = False):
+    log_s = jnp.log(s)
+    log_d = jnp.log(d)
+
+    u = jnp.zeros_like(s)
+    v = jnp.zeros_like(d)
+    iter = 0
+
+    for iter in range(max_iters):
+        u = gamma * (log_s - jax.nn.logsumexp((v[None, :] - C) / gamma, axis=1))
+        v = gamma * (log_d - jax.nn.logsumexp((u[:, None] - C) / gamma, axis=0))
+        iter += 1
+
+    # transport plan in log-space
+    log_T = (u[:, None] + v[None, :] - C) / gamma
+    T = jnp.exp(log_T)
+
+    return T, u,v,iter
 
 
 # ── Data ────────────────────────────────────────────────────────────────────
@@ -82,7 +101,7 @@ C = cdist_euclidean(source_points, target_points)   # shape (4, 4)
 
 if __name__ == "__main__":
     gamma = 0.2
-    T = sinkhorn_simple(s, d, C, gamma=gamma)
+    T,u,v = sinkhorn_simple(s, d, C, gamma=gamma)
 
     print("Row sums of T:", T.sum(axis=1), " — should equal s:", s)
     print("Col sums of T:", T.sum(axis=0), " — should equal d:", d)
