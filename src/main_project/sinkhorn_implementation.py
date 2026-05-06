@@ -61,26 +61,26 @@ for i in range(n_points):
     x_star = latent_start_torch[i:i+1]
 
     # Compute conditional for this point
-    diff        = x_star - latent_target_torch #distance measure
-    C_star      = (diff ** 2).sum(dim=-1) ** 0.5 
-    log_weights = (-C_star + v) / alpha # denominator but with log scaled
-    log_weights = log_weights - torch.logsumexp(log_weights, dim=0) # summation and normalization
-    p_y_given_x = torch.exp(log_weights)
-    expected_target = p_y_given_x @ latent_target_torch 
+    # diff        = x_star - latent_target_torch #distance measure
+    # C_star      = (diff ** 2).sum(dim=-1) ** 0.5 
+    # log_weights = (-C_star + v) / alpha # denominator but with log scaled
+    # log_weights = log_weights - torch.logsumexp(log_weights, dim=0) # summation and normalization
+    # p_y_given_x = torch.exp(log_weights)
+    # expected_target = p_y_given_x @ latent_target_torch 
 
-    # diff   = x_star - latent_target_torch
-    # M_star = (diff ** 2).sum(dim=-1) ** 0.5       # [m]
+    diff   = x_star - latent_target_torch
+    C_star = (diff ** 2).sum(dim=-1) ** 0.5       
 
-    # # Numerator: K(x*, y_j) * v(y_j)
-    # K_star   = torch.exp(-M_star / alpha)            # [m]
-    # v_scaled = torch.exp(v / alpha)                  # [m]
-    # weights  = K_star * v_scaled                   # [m]
+    # Numerator: K(x*, y_j) * v(y_j)
+    K_star   = torch.exp(-C_star / alpha)            
+    v_scaled = torch.exp(v / alpha)                  
+    weights  = K_star * v_scaled                   
 
-    # # Denominator: sum over all j
-    # p_y_given_x = weights / weights.sum()          # [m]  =  P(y_j | x*)
+    # Denominator: sum over all j
+    p_y_given_x = weights / weights.sum()          #  P(y | x*)
 
-    # # E[y | x*]
-    # expected_target = p_y_given_x @ latent_target_torch   # [latent_dim]
+    # E[y | x*]
+    expected_target = p_y_given_x @ latent_target_torch   
 
     # Source and target coords
     x0 = x_star.squeeze().detach().numpy()
