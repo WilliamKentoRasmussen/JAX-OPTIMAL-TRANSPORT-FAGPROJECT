@@ -30,8 +30,13 @@ for x, y in train_loader:
     target_data.extend(x[target_mask])
 
 # Stack and flatten to [n, 784] as JAX arrays
-start_arr  = jnp.array(np.stack([np.array(img).flatten() for img in start_data]))
-target_arr = jnp.array(np.stack([np.array(img).flatten() for img in target_data]))
+start_arr = jnp.asarray(
+    torch.stack(start_data).reshape(len(start_data), -1).numpy()
+)
+
+target_arr = jnp.asarray(
+    torch.stack(target_data).reshape(len(target_data), -1).numpy()
+)
 
 
 def recon(x):
