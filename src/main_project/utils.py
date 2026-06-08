@@ -14,10 +14,9 @@ def save(model, name="model", path="models"):
         eqx.tree_serialise_leaves(f, model)
 
 
-def load(name="model", path="models"):
+def load(name="model", path="models",model = AEv2(key=jr.PRNGKey(0)) ):
     filename = path + "/" + name + ".eqx"
     with open(filename, "rb") as f:
-        model = AEv2(key=jr.PRNGKey(0))
         return eqx.tree_deserialise_leaves(f, model)
 
 
