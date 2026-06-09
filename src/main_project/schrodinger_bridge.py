@@ -8,11 +8,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
-from main_project.sinkhornV2 import cdist_euclidean
+from main_project.sinkhorn import cdist_euclidean
 from main_project.utils import load
 from main_project.data import getData, getDataloader
 from sklearn.decomposition import PCA
-
+from main_project.model import AEv2
+from main_project.utils import load
+from main_project.data import getData, getDataloader
+from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION
+import time
 
 @jax.jit
 def cdist_euclidean(x: jax.Array, y: jax.Array) -> jax.Array:
@@ -287,39 +291,43 @@ class SchrodingerBridge:
 
 
 # ── Test ─────────────────────────────────────────────────────────────────────
-model = load(name="ae_best_model_lat2", path="models")
 
-training_data, _ = getData()
-train_loader = getDataloader(training_data)
+if __name__ == "__main__":
+    model = load(name="ae_best_model_lat2", path="models")
 
-source_data, target_data = [], []
-for x, y in train_loader:
-    source_data.extend(x[y == 0])
-    target_data.extend(x[y == 1])
+    training_data, _ = getData()
+    train_loader = getDataloader(training_data)
 
-source_arr = jnp.array(np.stack([np.array(img).flatten() for img in source_data]))
-target_arr = jnp.array(np.stack([np.array(img).flatten() for img in target_data]))
+    source_data, target_data = [], []
+    for x, y in train_loader:
+        source_data.extend(x[y == 0])
+        target_data.extend(x[y == 1])
 
-
-def recon(x):
-    r, z = model(x)
-    return r, z
+    source_arr = jnp.array(np.stack([np.array(img).flatten() for img in source_data]))
+    target_arr = jnp.array(np.stack([np.array(img).flatten() for img in target_data]))
 
 
-latent_source = jax.vmap(recon)(source_arr)[1]
-latent_target = jax.vmap(recon)(target_arr)[1]
+    def recon(x):
+        r, z = model(x)
+        return r, z
 
-min_count = min(latent_source.shape[0], latent_target.shape[0])
-latent_source = latent_source[:min_count]
-latent_target = latent_target[:min_count]
 
-weights_x = jnp.array(density_weights(np.array(latent_source), k=5))
-weights_y = jnp.array(density_weights(np.array(latent_target), k=5))
+    latent_source = jax.vmap(recon)(source_arr)[1]
+    latent_target = jax.vmap(recon)(target_arr)[1]
 
-bridge = SchrodingerBridge(n_steps=20, sigma=0.5, max_iter=100, tol=1e-6)
-bridge.fit(latent_source=latent_source, latent_target=latent_target, weights_x=weights_x, weights_y=weights_y)
+    min_count = min(latent_source.shape[0], latent_target.shape[0])
+    latent_source = latent_source[:min_count]
+    latent_target = latent_target[:min_count]
 
-P = bridge.get_transport_plan()
-result = bridge.sample_trajectories(P=P, model=model, n_samples=10)
-bridge.plot_trajectories(result, n_display=5)
-bridge.plot_latent_paths(result, n_display=1)
+    weights_x = jnp.array(density_weights(np.array(latent_source), k=5))
+    weights_y = jnp.array(density_weights(np.array(latent_target), k=5))
+
+    bridge = SchrodingerBridge(n_steps=20, sigma=0.5, max_iter=100, tol=1e-6)
+    bridge.fit(latent_source=latent_source, latent_target=latent_target, weights_x=weights_x, weights_y=weights_y)
+
+    P = bridge.get_transport_plan()
+    result = bridge.sample_trajectories(P=P, model=model, n_samples=10)
+    bridge.plot_trajectories(result, n_display=5)
+    bridge.plot_latent_paths(result, n_display=1)
+
+

@@ -94,7 +94,7 @@ def evaluate_by_model(model):
 
         data.append([frac, mmd,classifier_conf[1]])
 
-        plot_transport_images(imgs, target_img, n=5, title=f"MMD score of {mmd.item()} and classification confidence of {classifier_conf[1]}")
+        #plot_transport_images(imgs, target_img, n=5, title=f"MMD score of {mmd.item()} and classification confidence of {classifier_conf[1]}")
 
     df = pd.DataFrame(data, columns=columns)
 
@@ -108,15 +108,39 @@ def evaluate_by_model(model):
 
 
 
+def evaluate_sb_by_model(model):
+    decoded = np.load(f"data/sb_{model}/decoded.npy")          # (n_samples, n_steps, 784)
+    target_img = np.load(f"data/{model}/target_images.npy")    # reuse sinkhorn's target
+
+    # decoded is already (n_samples, n_steps, 784) — transpose to (n_steps, n_samples, 784)
+    # to match the same iteration pattern as intermediate_images
+    decoded = decoded.transpose(1, 0, 2)  # (n_steps, n_samples, 784)
+
+    n_steps = decoded.shape[0]
+    t_values = np.linspace(0, 1, n_steps)
+
+    data = []
+    for t, imgs in zip(t_values, decoded):
+        mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="rbf")
+        classifier_conf = classifier_confidence(imgs, 1)
+        data.append([t, mmd, classifier_conf[1]])
+
+    df = pd.DataFrame(data, columns=["t (time step)", "MMD", "Confidence of Classifier"])
+
+    print(df)
+    print("\n\n\n")
+    df.to_csv(f"data/sb_{model}/evaluation.csv")
+
+
 def run_evaluation():
-    for dim in MODELS_DIM: 
+    for dim in MODELS_DIM:
         model_name = f"ae_model_dim_{dim}"
 
-        print("Evaluating model", model_name, "\n")
-        evaluate_by_model(model = model_name)
-        
-    print("Evaluating for no ae\n")
-    #evaluate_by_model("no_ae")
+        print("Evaluating Sinkhorn model", model_name, "\n")
+        evaluate_by_model(model=model_name)
+
+        print("Evaluating Schrödinger Bridge model", model_name, "\n")
+        evaluate_sb_by_model(model=model_name)
 
 
 
