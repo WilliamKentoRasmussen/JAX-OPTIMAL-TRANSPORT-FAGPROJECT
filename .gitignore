@@ -1,3 +1,6 @@
+
+echo "data/**/*.npy" >> .gitignore
+
 docs/site/
 
 # test cache
