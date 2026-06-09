@@ -13,26 +13,8 @@ from main_project.utils import load
 from main_project.data import getData, getDataloader
 
 model = load(name="ae_best_model_lat2", path="models")
-
-
 gamma = 1e-3
 stop_threshold = 1e-5
-
-training_data, _ = getData()
-train_loader = getDataloader(training_data)
-
-source_data = []
-target_data = []
-
-for x, y in train_loader:
-    source_mask = y == 0
-    target_mask = y == 1
-    source_data.extend(x[source_mask])
-    target_data.extend(x[target_mask])
-
-# Stack and flatten to [n, 784] as JAX arrays
-source_arr = jnp.array(np.stack([np.array(img).flatten() for img in source_data]))
-target_arr = jnp.array(np.stack([np.array(img).flatten() for img in target_data]))
 
 
 def get_latent_start_and_target_dist():
@@ -49,7 +31,7 @@ def get_latent_start_and_target_dist():
         target_data.extend(x[target_mask])
 
     # Stack and flatten to [n, 784] as JAX arrays
-    start_arr = jnp.asarray(torch.stack(start_data).reshape(len(start_data), -1).numpy())
+    source_arr = jnp.asarray(torch.stack(start_data).reshape(len(start_data), -1).numpy())
 
     target_arr = jnp.asarray(torch.stack(target_data).reshape(len(target_data), -1).numpy())
 
@@ -57,7 +39,7 @@ def get_latent_start_and_target_dist():
         recon, z = model(x)
         return recon, z
 
-    latent_start = jax.vmap(recon)(start_arr)[1]  # [n, latent_dim]
+    latent_start = jax.vmap(recon)(source_arr)[1]  # [n, latent_dim]
     latent_target = jax.vmap(recon)(target_arr)[1]  # [m, latent_dim]
 
     # Used to ensure no out of bounds error

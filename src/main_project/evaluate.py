@@ -46,9 +46,9 @@ def MMD(x: Array, y: Array, kernel):
     if kernel == "rbf":
         bandwidth_range = [10, 15, 20, 50]
         for a in bandwidth_range:
-            XX += torch.exp(-0.5 * dxx / a)
-            YY += torch.exp(-0.5 * dyy / a)
-            XY += torch.exp(-0.5 * dxy / a)
+            XX += jnp.exp(-0.5 * dxx / a)
+            YY += jnp.exp(-0.5 * dyy / a)
+            XY += jnp.exp(-0.5 * dxy / a)
 
     # MMD² = E[k(x,x')] + E[k(y,y')] − 2·E[k(x,y)]
     return jnp.mean(XX + YY - 2.0 * XY)
@@ -80,7 +80,8 @@ def evaluate_latent_space_knn(latent_array, labels):
 
 columns = "Fraction of transport","MDD", "Confidence of Classifier"
 def evaluate_by_model(model):
-    source_img, target_img, intermediate_images = np.load("data/original_images.npy"), np.load("data/expected_target_images.npy"), np.load(f"data/{model}/intermediate_images.npy")
+    source_img, target_img, expected_target_img, intermediate_images = np.load(f"data/{model}/original_images.npy"),np.load(f"data/{model}/target_images.npy"), np.load(f"data/{model}/expected_target_images.npy"), np.load(f"data/{model}/intermediate_images.npy")
+
     intermediate_images = intermediate_images.transpose(1, 0, 2)  # Corrects order for easier plotting
 
     data = []
@@ -88,12 +89,12 @@ def evaluate_by_model(model):
 
    
         
-        mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="multiscale")
+        mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="rbf")
         classifier_conf = classifier_confidence(imgs, 1)
 
         data.append([frac, mmd,classifier_conf[1]])
 
-        #plot_transport_images(imgs, target_img, n=5, title=f"MMD score of {mmd.item()} and classification confidence of {classifier_conf[1]}")
+        plot_transport_images(imgs, target_img, n=5, title=f"MMD score of {mmd.item()} and classification confidence of {classifier_conf[1]}")
 
     df = pd.DataFrame(data, columns=columns)
 
@@ -111,7 +112,7 @@ def run_evaluation():
     for dim in MODELS_DIM: 
         model_name = f"ae_model_dim_{dim}"
 
-        print("Evaluating model ", model_name, "\n")
+        print("Evaluating model", model_name, "\n")
         evaluate_by_model(model = model_name)
         
 
