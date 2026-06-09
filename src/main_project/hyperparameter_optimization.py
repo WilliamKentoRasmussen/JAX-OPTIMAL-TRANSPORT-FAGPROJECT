@@ -151,15 +151,13 @@ print("\nRetraining best configuration on full training data...")
 best_params    = best.params
 key            = jr.PRNGKey(999)
 best_model     = AEv2(
-    latent_dim=best_params["latent_dim"],
+    latent_dim=2,
     hidden_dim=best_params["hidden_dim"],
-    n_layers=best_params["n_layers"],
     key=key,
 )
 final_trainer  = Trainer(
     model=best_model,
     optimizer=optax.adam(best_params["lr"]),
-    train_loader=None, val_loader=None, test_loader=None,
     lambda_l2=best_params["lambda_l2"],
 )
 final_model, _, final_test_loss = final_trainer.train(

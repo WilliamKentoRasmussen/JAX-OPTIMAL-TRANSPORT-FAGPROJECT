@@ -103,9 +103,9 @@ class Trainer:
         test_loss = self.evaluate(model, test_loader)
         print(f"Test loss: {test_loss:.4f}")
 
-        # Save best model and training history
-        save(model=model, name=model_name)
-        df = pd.DataFrame(history)
-        df.to_csv("training_history.csv", index=False)
+        if model_name == "ae_best_model_bo":
+            save(model=model, name=model_name)
+            df = pd.DataFrame(history)
+            df.to_csv("training_history.csv", index=False)
 
         return model, history, test_loss
