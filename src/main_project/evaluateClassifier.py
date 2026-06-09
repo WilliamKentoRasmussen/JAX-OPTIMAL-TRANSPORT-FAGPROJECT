@@ -5,7 +5,7 @@ import optax  # https://github.com/deepmind/optax
 import torch  # https://pytorch.org
 import torchvision  # https://pytorch.org
 from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
-from main_project.sinkhorn_implementation import get_sinkhorn_images
+
 from main_project.train import train_classifier
 from main_project.utils import load
 import numpy as np
@@ -20,10 +20,6 @@ SEED = 5678
 
 key = jax.random.PRNGKey(SEED)
 
-
-
-
-
 # print("starting training")
 # model, history, test_loss = train_classifier(
 #     epochs=50,
@@ -31,7 +27,6 @@ key = jax.random.PRNGKey(SEED)
 #     model=model,
 #     model_name="evaluate_classifier",
 # )
-#get_sinkhorn_images(True)
 
 class targetClassifier(eqx.Module):
     CNN: eqx.Module
@@ -68,35 +63,9 @@ model = load(name="evaluate_classifier", path="models", model= targetClassifier(
 
 
 
-
-
-
-
-
-
-#plot_transport_images(original_images, expected_target_images)
-
-
-#log_probs = jax.vmap(model)(original_images[0])
-#probs = jnp.exp(log_probs)  # convert from log probs to probs
-
-# for image_idx, image_prob in enumerate(probs):
-#     image = original_images[image_idx]
-    
-    
-#     plt.figure() 
-#     plt.imshow(image.reshape(28, 28), cmap="gray")
-#     plt.title(f"Image Index: {image_idx}")
-#     plt.show() 
-    
-
-#     for i, class_prob in enumerate(image_prob):
-#         print(i, " = ", f"{class_prob:.10f}")
-
-
-def plot_transport_images(original_images, expected_target_images, n=5):
+def plot_transport_images(original_images, expected_target_images, n=5, title = "Transport plot"):
     fig, axes = plt.subplots(2, n, figsize=(2*n, 4))
-    
+
     for i in range(n):
         axes[0, i].imshow(original_images[i].reshape(28, 28), cmap="gray")
         axes[0, i].axis("off")
@@ -106,7 +75,8 @@ def plot_transport_images(original_images, expected_target_images, n=5):
     
     axes[0, 0].set_ylabel("Source (0)", fontsize=12)
     axes[1, 0].set_ylabel("Transported (1)", fontsize=12)
-    plt.suptitle("OT Transport: digit 0 -> digit 1")
+
+    plt.suptitle(f"OT Transport: digit 0 -> digit 1 - with {title} ")
     plt.tight_layout()
     plt.show()
 
@@ -134,7 +104,6 @@ if __name__ == "__main__":
     intermediate_images = np.load(
             "data/intermediate_images.npy"
         )
-    print(intermediate_images.shape)
     intermediate_images = intermediate_images.transpose(1, 0, 2) #Corrects order
     
 

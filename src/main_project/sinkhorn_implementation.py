@@ -80,45 +80,6 @@ def get_probability_y_given_x(T, index):
     return p_y_given_x
 
 
-def get_sinkhorn_images(save):
-    print("getting image number: \n")
-    latent_start, latent_target = get_latent_start_and_target_dist()
-    print("Executing sinkhorn: \n")
-
-    T,u,v,iter = execute_sinkhorn(latent_start, latent_target)
-
-    original_images = []
-    expected_target_images = []
-
-    n = 10#max(10, len(latent_start))
-
-    for i in range(n):
-        x_star = latent_start[i:i+1]
-        
-        p_y_given_x = get_probability_y_given_x(T,i)
-        expected_target = p_y_given_x @ latent_target
-        
-        x_0_flat = x_star.reshape(x_star.shape[0], -1)
-        x_1_flat = expected_target.reshape(expected_target.shape[0], -1)
-
-        x0 = jnp.array(x_0_flat.squeeze())
-        x1 = jnp.array(x_1_flat.squeeze())
-    
-        source_img = model.decoder(x0)  # This gives reconstructed image
-        target_img = model.decoder(x1)
-        
-        original_images.append(np.array(source_img).reshape(1, 28, 28))
-        expected_target_images.append(np.array(target_img).reshape(1, 28, 28))
-
-    if save:
-        np.save("data/original_images.npy", np.array(original_images))
-        np.save("data/expected_target_images.npy", np.array(expected_target_images))
-    return original_images, expected_target_images
-
-
-
-
-
 
 if __name__ == "__main__":
 
