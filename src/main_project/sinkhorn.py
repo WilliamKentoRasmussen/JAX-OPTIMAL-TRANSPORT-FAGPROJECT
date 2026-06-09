@@ -278,7 +278,7 @@ def main():
         print("Saving sinkhorn transformation for", model_name)
         save_sinkhorn_transformation(model_name = model_name, save =True)
 
-    save_sinkhorn_transformation_without_ae()
+    #save_sinkhorn_transformation_without_ae()
 
 if __name__ == "__main__":
     main()
