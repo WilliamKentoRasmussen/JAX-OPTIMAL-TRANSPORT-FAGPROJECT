@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-from main_project.sinkhorn_implementation import get_sinkhorn_images
-=======
 from typing import Union
 import numpy as np
 import torch
