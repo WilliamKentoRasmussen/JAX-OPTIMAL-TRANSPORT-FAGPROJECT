@@ -26,6 +26,7 @@ dependencies = [
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "optax>=0.2.7",
+    "optuna>=4.9.0",
     "pandas>=3.0.1",
     "point-cloud-utils>=0.34.0",
     "polyscope>=2.6.1",

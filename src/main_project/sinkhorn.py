@@ -167,7 +167,6 @@ def main():
 
     #warmup_jax(n=MAX_POINTS, dim=MODELS_DIM[0]) run only when interested in running time
     for dim in MODELS_DIM: 
-
         model_name = f"ae_model_dim_{dim}"
         start = time.perf_counter()
         print("Saving sinkhorn transformation for", model_name)
