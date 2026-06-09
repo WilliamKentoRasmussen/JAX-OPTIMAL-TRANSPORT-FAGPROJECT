@@ -12,7 +12,6 @@ def getData():
 
 
 def getDataloader(data) -> DataLoader:
-
     dataloader = DataLoader(data, batch_size=64, shuffle=True)
     return dataloader
 
