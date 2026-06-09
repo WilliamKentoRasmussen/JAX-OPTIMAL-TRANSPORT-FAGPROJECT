@@ -13,6 +13,8 @@ from main_project.utils import load
 from main_project.data import getData, getDataloader
 
 model = load(name="ae_best_model_lat2", path="models")
+
+
 gamma = 1e-3
 stop_threshold = 1e-5
 
@@ -168,9 +170,12 @@ if __name__ == "__main__":
 
         ax.annotate("", xy=x1, xytext=x0, arrowprops=dict(arrowstyle="->", color="black", alpha=0.5, lw=1.0))
 
-    np.save("data/intermediate_images.npy", np.array(intermediate_images))
-    np.save("data/original_images.npy", np.array(original_images))
-    np.save("data/expected_target_images.npy", np.array(expected_target_images))
+
+    if save: 
+        np.save("data/intermediate_images.npy", np.array(intermediate_images))
+        np.save("data/original_images.npy", np.array(original_images))
+        np.save("data/expected_target_images.npy", np.array(expected_target_images))
+
 
     # Plot all digit 0 and digit 1 points in background for context
     all_start = np.array(latent_start)
