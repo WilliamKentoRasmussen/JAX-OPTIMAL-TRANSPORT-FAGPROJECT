@@ -17,8 +17,8 @@ def getDataloader(data) -> DataLoader:
 
 
 if __name__ == "__main__":
-    training_data,test_data = getData()
-    train_dataloader, test_dataloader = getDataloader(training_data),getDataloader(test_data)
+    training_data, test_data = getData()
+    train_dataloader, test_dataloader = getDataloader(training_data), getDataloader(test_data)
     dummy_x, dummy_y = next(iter(train_dataloader))
     print(dummy_x.size(), dummy_y.size())
 
@@ -45,4 +45,4 @@ if __name__ == "__main__":
 #     dataset.preprocess(output_folder)
 if __name__ == "main":
     training_data, test_data = getData()
-    print(len(training_data),len(test_data))
+    print(len(training_data), len(test_data))
