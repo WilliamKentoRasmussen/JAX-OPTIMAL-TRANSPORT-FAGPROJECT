@@ -30,7 +30,7 @@ stop_threshold = 1e-5
 def save_sinkhorn_transformation(model_name, save = True):
     latent_dim = int(re.search(r'_(\d+)', model_name).group(1))
 
-    model = load(name=model_name, path="models", model=AEv2(key=jr.PRNGKey(0), latent_dim=latent_dim)) # ae_best_model_lat2
+    model = load(name=model_name, path="models", latent_dim=latent_dim) # ae_best_model_lat2
 
     t0 = time.perf_counter()
     latent_source, latent_target, T, u, v, iter = run_sinkhorn_by_model(model)
@@ -155,17 +155,6 @@ def save_sinkhorn_transformation_without_ae(save=True):
 
 
 
-def warmup_jax(n, dim):
-    dummy_x = jnp.ones((n, dim))
-    dummy_y = jnp.ones((n, dim))
-    s = jnp.ones(n) / n
-    d = jnp.ones(n) / n
-    C = cdist_euclidean(dummy_x, dummy_y)
-    T, *_ = sinkhorn_log(s, d, C, gamma=gamma, max_iters=2)
-    jax.block_until_ready(T)
-
-
-
 
 def save_sb_transformation(model_name, save=True):
     latent_dim = int(re.search(r'_(\d+)', model_name).group(1))
@@ -216,6 +205,17 @@ def save_sb_transformation(model_name, save=True):
         os.makedirs(save_dir, exist_ok=True)
         np.save(f"{save_dir}/decoded.npy",      result["decoded"])
         np.save(f"{save_dir}/trajectories.npy", result["trajectories"])
+
+
+def warmup_jax(n, dim):
+    dummy_x = jnp.ones((n, dim))
+    dummy_y = jnp.ones((n, dim))
+    s = jnp.ones(n) / n
+    d = jnp.ones(n) / n
+    C = cdist_euclidean(dummy_x, dummy_y)
+    T, *_ = sinkhorn_log(s, d, C, gamma=gamma, max_iters=2)
+    jax.block_until_ready(T)
+
 
 
 def main():
