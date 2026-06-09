@@ -10,41 +10,47 @@ class AEv2(eqx.Module):
     encoder: eqx.Module
     decoder: eqx.Module
 
-    def __init__(self, key, latent_dim=2):
-        super().__init__()
-        key_splt = jax.random.split(key, 10)
+    def __init__(
+        self,
+        key,
+        latent_dim: int = 2,
+        hidden_dims: list = [256, 128, 64, 32],   # encoder dims, decoder is reversed
+        activation = jax.nn.leaky_relu,
+        output_activation = jax.nn.sigmoid,
+    ):
+        key_splits = jax.random.split(key, 2 * (len(hidden_dims) + 1))
 
-        self.encoder = eqx.nn.Sequential(
-            (
-                eqx.nn.Linear(28 * 28, 256, key=key_splt[0]),
-                eqx.nn.Lambda(jax.nn.leaky_relu),
-                eqx.nn.Linear(256, 128, key=key_splt[1]),
-                eqx.nn.Lambda(jax.nn.leaky_relu),
-                eqx.nn.Linear(128, 64, key=key_splt[2]),
-                eqx.nn.Lambda(jax.nn.leaky_relu),
-                eqx.nn.Linear(64, 32, key=key_splt[3]),
-                eqx.nn.Lambda(jax.nn.leaky_relu),
-                eqx.nn.Linear(32, latent_dim, key=key_splt[4]),
-            )
+        # ── Encoder: 784 → hidden_dims → latent_dim ──────────────────────────
+        encoder_layers = []
+        in_dim = 28 * 28
+        for i, out_dim in enumerate(hidden_dims):
+            encoder_layers.append(eqx.nn.Linear(in_dim, out_dim, key=key_splits[i]))
+            encoder_layers.append(eqx.nn.Lambda(activation))
+            in_dim = out_dim
+        
+        encoder_layers.append(
+            eqx.nn.Linear(in_dim, latent_dim, key=key_splits[len(hidden_dims)])
         )
+        self.encoder = eqx.nn.Sequential(tuple(encoder_layers))
 
-        self.decoder = eqx.nn.Sequential(
-            (
-                eqx.nn.Linear(latent_dim, 32, key=key_splt[5]),
-                eqx.nn.Lambda(jax.nn.leaky_relu),
-                eqx.nn.Linear(32, 64, key=key_splt[6]),
-                eqx.nn.Lambda(jax.nn.leaky_relu),
-                eqx.nn.Linear(64, 128, key=key_splt[7]),
-                eqx.nn.Lambda(jax.nn.leaky_relu),
-                eqx.nn.Linear(128, 256, key=key_splt[8]),
-                eqx.nn.Lambda(jax.nn.leaky_relu),
-                eqx.nn.Linear(256, 28 * 28, key=key_splt[9]),
-                eqx.nn.Lambda(jax.nn.sigmoid),
-            )
+        # ── Decoder: latent_dim → hidden_dims reversed → 784 ─────────────────
+        decoder_dims = list(reversed(hidden_dims))
+        decoder_layers = []
+        in_dim = latent_dim
+        offset = len(hidden_dims) + 1
+        for i, out_dim in enumerate(decoder_dims):
+            decoder_layers.append(eqx.nn.Linear(in_dim, out_dim, key=key_splits[offset + i]))
+            decoder_layers.append(eqx.nn.Lambda(activation))
+            in_dim = out_dim
+        # final projection to 784
+        decoder_layers.append(
+            eqx.nn.Linear(in_dim, 28 * 28, key=key_splits[offset + len(decoder_dims)])
         )
+        decoder_layers.append(eqx.nn.Lambda(output_activation))
+        self.decoder = eqx.nn.Sequential(tuple(decoder_layers))
 
     def __call__(self, x):
-        z = self.encoder(x)
+        z   = self.encoder(x)
         out = self.decoder(z)
         return out, z
 
