@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from main_project.utils import load
 from main_project.data import getData, getDataloader
-from main_project.sinkhornV2 import sinkhorn_log, sinkhorn_simple, cdist_euclidean
+from main_project.sinkhorn import sinkhorn_log, sinkhorn_simple, cdist_euclidean
 import torch
 from matplotlib.gridspec import GridSpec
 
