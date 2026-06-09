@@ -13,7 +13,7 @@ from main_project.data import getData, getDataloader
 from main_project.visualize import plot_latent_clusters
 
 
-model = load(name="ae_best_model", path="models")
+model = load(name="ae_best_model_lat2", path="models")
 
 
 _,test_data = getData()
@@ -39,7 +39,3 @@ def evaluate_latent_space_knn(latent_array,labels):
 
 knn_acc = evaluate_latent_space_knn(z_array,all_labels)
 print(f"KNN Split accuracy {knn_acc}")
-
-
-
->>>>>>> kerem_3weeks
