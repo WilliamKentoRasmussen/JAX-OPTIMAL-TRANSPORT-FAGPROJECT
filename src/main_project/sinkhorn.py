@@ -208,7 +208,7 @@ def save_sinkhorn_transformation(model_name, save = True):
         np.save(f"{save_dir}/target_images.npy", np.array(target_images))
 
 
-def save_sinkhorn_transformation_without_ae():
+def save_sinkhorn_transformation_without_ae(save=True):
     training_data, _ = getData()
     train_loader = getDataloader(training_data)
 
@@ -221,13 +221,10 @@ def save_sinkhorn_transformation_without_ae():
         start_data.extend(x[start_mask])
         target_data.extend(x[target_mask])
 
-    # Stack and flatten to [n, 784] as JAX arrays
     source_arr = jnp.asarray(torch.stack(start_data).reshape(len(start_data), -1).numpy())
     target_arr = jnp.asarray(torch.stack(target_data).reshape(len(target_data), -1).numpy())
 
-    # Used to ensure no out of bounds error
     min_count = min(source_arr.shape[0], target_arr.shape[0])
-
     source_arr = source_arr[:min_count]
     target_arr = target_arr[:min_count]
 
@@ -237,7 +234,38 @@ def save_sinkhorn_transformation_without_ae():
 
     T, u, v, iter = sinkhorn_log(C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=stop_threshold, verbose=True)
 
-    
+    source_images = []
+    target_images = []
+    expected_target_images = []
+    intermediate_images = []
+
+    n_points = min(MAX_POINTS, len(source_arr))
+    for i in range(n_points):
+        p_y_given_x = get_probability_y_given_x(T, i)
+
+        # All three are now consistently 1D vectors
+        x_star = jnp.array(source_arr[i].squeeze())
+        y_point = jnp.array(target_arr[i].squeeze())
+        expected_target = jnp.array((p_y_given_x @ target_arr).squeeze())  # (784,)
+
+        intermediate_points = []
+        for fraction in INTERMEDIATE_FRACTIONS:
+            decoded_img = (1 - fraction) * x_star + fraction * expected_target
+            intermediate_points.append(np.array(decoded_img))
+
+        source_images.append(np.array(x_star))
+        target_images.append(np.array(y_point))
+        expected_target_images.append(np.array(expected_target))
+        intermediate_images.append(intermediate_points)
+
+    if save:
+        save_dir = f"data/no_ae"
+        os.makedirs(save_dir, exist_ok=True)
+        np.save(f"{save_dir}/intermediate_images.npy", np.array(intermediate_images))
+        np.save(f"{save_dir}/original_images.npy", np.array(source_images))
+        np.save(f"{save_dir}/expected_target_images.npy", np.array(expected_target_images))
+        np.save(f"{save_dir}/target_images.npy", np.array(target_images))
+
 
 
 
@@ -250,6 +278,7 @@ def main():
         print("Saving sinkhorn transformation for", model_name)
         save_sinkhorn_transformation(model_name = model_name, save =True)
 
+    #save_sinkhorn_transformation_without_ae()
 
 if __name__ == "__main__":
     main()
