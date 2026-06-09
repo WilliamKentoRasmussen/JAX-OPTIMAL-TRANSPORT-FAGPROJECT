@@ -12,6 +12,7 @@ from main_project.train import train_classifier
 from main_project.model import targetClassifier
 from main_project.visualize import plot_transport_images
 from main_project.utils import load
+from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS
 
 
 SEED = 5678
@@ -77,18 +78,13 @@ def evaluate_latent_space_knn(latent_array, labels):
 
 
 
-
-#Plotting
 columns = "Fraction of transport","MDD", "Confidence of Classifier"
-data = []
-
-if __name__ == "__main__":
-
-    source_img, target_img, intermediate_images = np.load("data/original_images.npy"), np.load("data/expected_target_images.npy"), np.load("data/intermediate_images.npy")
+def evaluate_by_model(model):
+    source_img, target_img, intermediate_images = np.load("data/original_images.npy"), np.load("data/expected_target_images.npy"), np.load(f"data/{model}/intermediate_images.npy")
     intermediate_images = intermediate_images.transpose(1, 0, 2)  # Corrects order for easier plotting
 
-    fractions = [0.25, 0.5, 0.75, 1.0]
-    for frac, imgs in zip(fractions, intermediate_images):
+    data = []
+    for frac, imgs in zip(INTERMEDIATE_FRACTIONS, intermediate_images):
 
    
         
@@ -101,7 +97,28 @@ if __name__ == "__main__":
 
     df = pd.DataFrame(data, columns=columns)
 
-    print("From digit 0 to digit 1 evaluation scores")
+
     print(df)
     print("\n\n\n")
-    print(df.to_latex())
+    df.to_csv(f"data/{model}/evalution.csv")
+    #print(df.to_latex())
+
+
+
+
+
+def run_evaluation():
+    for dim in MODELS_DIM: 
+        model_name = f"ae_model_dim_{dim}"
+
+        print("Evaluating model ", model_name, "\n")
+        evaluate_by_model(model = model_name)
+        
+
+
+
+
+if __name__ == "__main__":
+    #Plotting
+    run_evaluation()
+    
