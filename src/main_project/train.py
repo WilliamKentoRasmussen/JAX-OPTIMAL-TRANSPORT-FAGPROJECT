@@ -203,3 +203,11 @@ def train_classifier(
 
 if __name__ == "__main__":
     model,fold_results,test_results = train(epochs=1000,val_split=0.2)
+
+    # print("starting training evaluation classifier")
+    # model, history, test_loss = train_classifier(
+    #     epochs=50,
+    #     val_split=0.2,
+    #     model=model,
+    #     model_name="evaluate_classifier",
+    # )
