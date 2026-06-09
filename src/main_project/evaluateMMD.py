@@ -6,11 +6,6 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-
-
 # https://www.onurtunali.com/ml/2019/03/08/maximum-mean-discrepancy-in-machine-learning.html
 def MMD(x: Array, y: Array, kernel):
     

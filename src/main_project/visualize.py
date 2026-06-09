@@ -14,6 +14,25 @@ from main_project.data import getData  # fixed
 
 labels_map = {i: str(i) for i in range(10)}
 
+
+def plot_transport_images(original_images, expected_target_images, n=5, title = "Transport plot"):
+    fig, axes = plt.subplots(2, n, figsize=(2*n, 4))
+
+    for i in range(n):
+        axes[0, i].imshow(original_images[i].reshape(28, 28), cmap="gray")
+        axes[0, i].axis("off")
+        
+        axes[1, i].imshow(expected_target_images[i].reshape(28, 28), cmap="gray")
+        axes[1, i].axis("off")
+    
+    axes[0, 0].set_ylabel("Source (0)", fontsize=12)
+    axes[1, 0].set_ylabel("Transported (1)", fontsize=12)
+
+    plt.suptitle(f"OT Transport: digit 0 -> digit 1 - with {title} ")
+    plt.tight_layout()
+    plt.show()
+    
+
 def plot_random_samples(training_data):  # fixed: was using global
     figure = plt.figure(figsize=(10, 4))
     cols, rows = 10, 3
@@ -25,6 +44,7 @@ def plot_random_samples(training_data):  # fixed: was using global
         plt.axis("off")
         plt.imshow(img.squeeze(), cmap="gray")
     plt.show()
+
 
 def plot_latent_clusters(training_data, model, max_points=20000, point_size=4, alpha=0.6):
     xs, ys = [], []
