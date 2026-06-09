@@ -126,7 +126,7 @@ def train(epochs=20, val_split=0.2, model = AEv2(key=jr.PRNGKey(0)), model_name=
     # Save best model and training history
     save(model=model, name=model_name)
     df = pd.DataFrame(history)
-    df.to_csv("training_history.csv", index=False)
+    df.to_csv(f"{model_name}_training_history.csv", index=False)
     
     return model, history, test_loss
 
@@ -202,4 +202,7 @@ def train_classifier(
 
 
 if __name__ == "__main__":
-    model,fold_results,test_results = train(epochs=1000,val_split=0.2)
+    lantent_dimensionality = [2, 16, 64, 128]
+    for d in lantent_dimensionality:
+        model,fold_results,test_results = train(epochs=100,val_split=0.2, model = AEv2(key=jr.PRNGKey(0), latent_dim = d), model_name=f"ae_model_dim_{d}")
+
