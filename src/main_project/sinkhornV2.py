@@ -60,8 +60,8 @@ def sinkhorn_simple(
             break
 
     # Outer product scaling: T[i,j] = u[i] * K[i,j] * v[j]
-    T = u[:, None] * K * v[None, :]
-    return T,u,v
+    P = u[:, None] * K * v[None, :]
+    return P,u,v
 
 def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000,stop_thresh = 1e-5,verbose = False):
     log_s = jnp.log(s)
@@ -77,10 +77,10 @@ def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000,stop_thresh = 1e-5,verbose =
         iter += 1
 
     # transport plan in log-space
-    log_T = (u[:, None] + v[None, :] - C) / gamma
-    T = jnp.exp(log_T)
+    log_P = (u[:, None] + v[None, :] - C) / gamma
+    P = jnp.exp(log_P)
 
-    return T, u,v,iter
+    return P, u,v,iter
 
 
 # ── Data ────────────────────────────────────────────────────────────────────
@@ -101,11 +101,11 @@ C = cdist_euclidean(source_points, target_points)   # shape (4, 4)
 
 if __name__ == "__main__":
     gamma = 0.2
-    T,u,v = sinkhorn_simple(s, d, C, gamma=gamma)
+    P,u,v = sinkhorn_simple(s, d, C, gamma=gamma)
 
-    print("Row sums of T:", T.sum(axis=1), " — should equal s:", s)
-    print("Col sums of T:", T.sum(axis=0), " — should equal d:", d)
-    print("\nTransport plan T:\n", T)
+    print("Row sums of T:", P.sum(axis=1), " — should equal s:", s)
+    print("Col sums of T:", P.sum(axis=0), " — should equal d:", d)
+    print("\nTransport plan T:\n", P)
 
     # ── Transport a new source point via the barycentric projection ──────────
     # The barycentric projection maps a source point x̂ to:
