@@ -273,7 +273,6 @@ def save_sinkhorn_transformation_without_ae(save=True):
 
 def main():
     for dim in MODELS_DIM: 
-
         model_name = f"ae_model_dim_{dim}"
         print("Saving sinkhorn transformation for", model_name)
         save_sinkhorn_transformation(model_name = model_name, save =True)
