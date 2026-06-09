@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from main_project.evaluateClassifier import plot_transport_images
+from main_project.evaluations.evaluateClassifier import plot_transport_images
 import equinox as eqx
 import jax
 import jax.numpy as jnp
