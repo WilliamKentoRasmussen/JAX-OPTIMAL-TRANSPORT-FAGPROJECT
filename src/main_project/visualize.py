@@ -10,12 +10,13 @@ from data import getData
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from sklearn.decomposition import PCA
 from main_project.utils import load
 
 training_data, test_data = getData()
 loss_data = pd.read_csv("data/training_history.csv")
 
-model = load(name="ae_best_model", path="models")
+model = load(name="ae_best_model_lat2", path="models")
 labels_map = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9"}
 
 
@@ -145,6 +146,72 @@ def plot_training_loss(data):
     plt.grid(True)
     plt.show()
 
+def pca_visualize_for_high_dimension(
+    training_data,
+    model,
+    max_points=20000,
+    point_size=4,
+    alpha=0.6,
+):
+    # --- Load and prepare data ---
+    xs, ys = [], []
+    for img, label in training_data:
+        xs.append(img.numpy())
+        ys.append(label)
+
+    x      = jnp.array(xs)
+    labels = np.array(ys)
+
+    x = x.reshape(x.shape[0], -1)
+
+    # --- Subsample ---
+    n   = len(x)
+    idx = np.random.choice(n, size=min(max_points, n), replace=False)
+    x      = x[idx]
+    labels = labels[idx]
+
+    # --- Encode ---
+    _, z = jax.vmap(model)(x)
+    z = np.array(z)                          
+
+    # --- PCA ---
+    pca      = PCA()
+    z_pca    = pca.fit_transform(z)          
+    cumvar   = np.cumsum(pca.explained_variance_ratio_) # how much do the k principal componentents explain the variance
+    n_eff    = np.searchsorted(cumvar, 0.95) + 1 # 0 based index so we want to find how many of the principal components reach 95% of variance
+
+    # latent space
+    fig1, ax1 = plt.subplots(figsize=(7, 6))
+    scatter = ax1.scatter(
+        z_pca[:, 0], z_pca[:, 1],
+        c=labels, cmap="tab10",
+        s=point_size, alpha=alpha,
+    )
+    plt.colorbar(scatter, ax=ax1).set_label("Digit")
+    ax1.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
+    ax1.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
+    ax1.set_title("Latent Space — PCA Projection")
+    ax1.set_aspect("equal")
+    plt.tight_layout()
+    plt.show()
+
+    # Cumulative variance
+    fig2, ax2 = plt.subplots(figsize=(7, 4))
+    ax2.plot(np.arange(1, len(cumvar) + 1), cumvar, marker=".", color="steelblue")
+    ax2.axhline(0.95, linestyle="--", color="red",   label="95% variance")
+    ax2.axvline(n_eff, linestyle="--", color="green", label=f"{n_eff} dims needed")
+    ax2.set_xlabel("Number of principal components")
+    ax2.set_ylabel("Cumulative variance explained")
+    ax2.set_title("Scree Plot")
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+    print(f"Latent dim:               {z.shape[1]}")
+    print(f"Effective dims (95% var): {n_eff}")
+    print(f"Variance in PC1+PC2:      {cumvar[1]*100:.1f}%")
+
 
 
 
@@ -154,4 +221,4 @@ def plot_training_loss(data):
 if __name__ == "__main__":
     plot_training_loss(loss_data)
     plot_reconstruction(training_data, model)
-    plot_latent_clusters(training_data, model)
+    pca_visualize_for_high_dimension(training_data,model)
