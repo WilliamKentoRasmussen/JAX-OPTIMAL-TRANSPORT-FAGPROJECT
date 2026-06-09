@@ -115,7 +115,8 @@ def run_evaluation():
         print("Evaluating model", model_name, "\n")
         evaluate_by_model(model = model_name)
         
-
+    print("Evaluating for no ae\n")
+    #evaluate_by_model("no_ae")
 
 
 
