@@ -12,17 +12,18 @@ import pandas as pd
 
 from main_project.model import AEv2
 from main_project.data import getData, getDataloader
-from main_project.trainnew import Trainer
+from main_project.trainnew import AETrainer
 from main_project.evaluate import MMD, classifier_confidence, evaluate_latent_space_knn
 from main_project.environment import INTERMEDIATE_FRACTIONS
-
 import os
+#https://medium.com/@vikakbary/the-first-step-to-optuna-understanding-766e50488c67
 
 if os.path.exists("ae_bo.db"):
     os.remove("ae_bo.db")
 
 
-def compute_bo_metrics(model, val_loader, source_class=0, target_class=1):
+def compute_bo_metrics(model, val_loader):
+
     all_z, all_labels = [], []
 
     for imgs, labels in val_loader:
@@ -41,18 +42,23 @@ def compute_bo_metrics(model, val_loader, source_class=0, target_class=1):
 
     # how separated clusters are
     knn_acc = evaluate_latent_space_knn(z, labels)
+    mmd_latent = 0.0
+    index = 0
+    for source_class in range(10):
+        for target_class in range(source_class + 1, 10):
 
-    # mmd in latent space between source and target class
-    source_z = z[labels == source_class]
-    target_z = z[labels == target_class]
+            # mmd in latent space between source and target class
+            source_z = z[labels == source_class]
+            target_z = z[labels == target_class]
 
-    n_min = min(len(source_z), len(target_z), 1000)  # limit to 1000 samples for MMD computation
+            n_min = min(len(source_z), len(target_z), 1000)  # limit to 1000 samples for MMD computation
 
-    mmd_latent = float(MMD(jnp.array(source_z[:n_min]), jnp.array(target_z[:n_min]), kernel="rbf"))
+            mmd_latent += float(MMD(jnp.array(source_z[:n_min]), jnp.array(target_z[:n_min]), kernel="rbf"))
+            index += 1
 
     return {
         "knn_acc": knn_acc,
-        "mmd_latent": mmd_latent,
+        "mmd_latent": mmd_latent / index,  # average MMD across all class pairs
     }
 
 
@@ -80,7 +86,7 @@ def objective(trial):
     key = jr.PRNGKey(trial.number)
     model = AEv2(latent_dim=2, hidden_dims=hidden_dim, key=key)
     optimizer = optax.adam(lr)
-    trainer = Trainer(
+    trainer = AETrainer(
         model=model,
         optimizer=optimizer,
         lambda_l2=lambda_l2,
@@ -103,13 +109,13 @@ def objective(trial):
     val_subset = Subset(training_data, range(split, n))
     val_loader = getDataloader(val_subset)
 
-    metrics = compute_bo_metrics(trained_model, val_loader, source_class=0, target_class=1)
+    metrics = compute_bo_metrics(trained_model, val_loader)
 
     trial.set_user_attr("val_loss", float(val_loss))  # save the attributes for each trial
     trial.set_user_attr("knn_acc", float(metrics["knn_acc"]))
     trial.set_user_attr("mmd_latent", float(metrics["mmd_latent"]))
 
-    return 0.4 * val_loss + 0.4 * metrics["mmd_latent"] + 0.2 * metrics["knn_acc"]
+    return 0.6 * val_loss - 0.2 * metrics["mmd_latent"] - 0.2 * metrics["knn_acc"]
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
@@ -117,9 +123,8 @@ def objective(trial):
 study = optuna.create_study(
     direction="minimize",
     sampler=optuna.samplers.TPESampler(seed=42),
-    pruner=optuna.pruners.MedianPruner(n_warmup_steps=5),  # stop early if val loss is below median of previous trials
+    pruner=optuna.pruners.MedianPruner(n_warmup_steps=5),  # stop early if val loss is below median of previous trials likely not optimum
     study_name="ae_full_optimization",
-    storage="sqlite:///ae_bo.db",
     load_if_exists=True,
 )
 
@@ -147,7 +152,7 @@ best_model = AEv2(
     hidden_dim=best_params["hidden_dim"],
     key=key,
 )
-final_trainer = Trainer(
+final_trainer = AETrainer(
     model=best_model,
     optimizer=optax.adam(best_params["lr"]),
     lambda_l2=best_params["lambda_l2"],

@@ -72,7 +72,7 @@ def classifier_confidence(transported_images, target_class=1):
 
 
 def evaluate_latent_space_knn(latent_array, labels):
-    classifier = KNeighborsClassifier(n_neighbors=8)  # 5 by default
+    classifier = KNeighborsClassifier(n_neighbors=6)  # 5 by default
     knn_acc = cross_val_score(classifier, latent_array, labels, cv=5).mean()
     return knn_acc
 

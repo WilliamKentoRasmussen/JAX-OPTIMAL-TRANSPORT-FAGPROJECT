@@ -10,12 +10,12 @@ import jax.random as jr
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold, cross_val_score
 from torch.utils.data import DataLoader, Subset
-from main_project.train import val_step
+from main_project.train import classifier_loss_fn, val_step
 from main_project.utils import save
 from tqdm import tqdm
 
 
-class Trainer:
+class AETrainer:
     def __init__(self, model, optimizer, lambda_l2):
         self.model = model
         self.optimizer = optimizer
@@ -114,3 +114,74 @@ class Trainer:
             df.to_csv("training_history.csv", index=False)
 
         return model, history, test_loss
+
+
+class ClassifierTrainer():
+    def __init__(self, model, optimizer):
+        self.model = model
+        self.optimizer = optimizer
+    @eqx.filter_jit
+    def classifier_loss_fn(self, model, x, labels):
+        # model outputs log_softmax, so we use nll loss
+        log_probs = jax.vmap(model)(x)  # [B, 10]
+        loss = optax.losses.softmax_cross_entropy_with_integer_labels(log_probs, labels)
+        return jnp.mean(loss)
+
+
+    @eqx.filter_jit
+    def classifier_train_steps(self, model, opt_state, x, labels):
+        loss, grads = eqx.filter_value_and_grad(self.classifier_loss_fn)(model, x, labels)
+        updates, opt_state = self.optimizer.update(grads, opt_state, params=eqx.filter(model, eqx.is_array))
+        return eqx.apply_updates(model, updates), opt_state, loss
+
+
+    def train_classifier(self,
+        epochs=20,
+        val_split=0.2,
+        model=None,
+        model_name="classifier",
+    ):
+        training_data, test_data = getData()
+
+        num_train = len(training_data)
+        indices = np.arange(num_train)
+        split = int(num_train * (1 - val_split))
+        train_loader = getDataloader(Subset(training_data, indices[:split]))
+        val_loader = getDataloader(Subset(training_data, indices[split:]))
+        test_loader = getDataloader(test_data)
+
+        opt_state = self.optimizer.init(eqx.filter(model, eqx.is_array))
+        history = []
+
+        for epoch in tqdm(range(epochs)):
+            epoch_loss, num_batches = 0.0, 0
+            for imgs, labels in train_loader:
+                imgs = jnp.array(imgs.numpy())
+                labels = jnp.array(labels.numpy())
+                model, opt_state, loss = self.classifier_train_steps(model, opt_state, imgs, labels)
+                epoch_loss += float(loss)
+                num_batches += 1
+            avg_train_loss = epoch_loss / num_batches
+
+            val_loss_total, val_batches = 0.0, 0
+            for imgs, labels in val_loader:
+                imgs = jnp.array(imgs.numpy())
+                labels = jnp.array(labels.numpy())
+                val_loss_total += float(self.classifier_loss_fn(model, imgs, labels))
+                val_batches += 1
+            avg_val_loss = val_loss_total / val_batches
+
+            history.append({"epoch": epoch + 1, "train_loss": avg_train_loss, "val_loss": avg_val_loss})
+            print(f"Epoch {epoch+1}/{epochs} — train: {avg_train_loss:.4f}, val: {avg_val_loss:.4f}")
+
+        test_loss, test_batches = 0.0, 0
+        for imgs, labels in test_loader:
+            imgs = jnp.array(imgs.numpy())
+            labels = jnp.array(labels.numpy())
+            test_loss += float(self.classifier_loss_fn(model, imgs, labels))
+            test_batches += 1
+        print(f"Test loss: {test_loss / test_batches:.4f}")
+
+        save(model=model, name=model_name)
+        pd.DataFrame(history).to_csv(model_name + "_training_history.csv", index=False)
+        return model, history, test_loss / test_batches
