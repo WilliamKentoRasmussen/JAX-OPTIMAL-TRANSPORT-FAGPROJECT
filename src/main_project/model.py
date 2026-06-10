@@ -14,9 +14,9 @@ class AEv2(eqx.Module):
         self,
         key,
         latent_dim: int = 2,
-        hidden_dims: list = [256, 128, 64, 32],   # encoder dims, decoder is reversed
-        activation = jax.nn.leaky_relu,
-        output_activation = jax.nn.sigmoid,
+        hidden_dims: list = [256, 128, 64, 32],  # encoder dims, decoder is reversed
+        activation=jax.nn.leaky_relu,
+        output_activation=jax.nn.sigmoid,
     ):
         key_splits = jax.random.split(key, 2 * (len(hidden_dims) + 1))
 
@@ -27,10 +27,8 @@ class AEv2(eqx.Module):
             encoder_layers.append(eqx.nn.Linear(in_dim, out_dim, key=key_splits[i]))
             encoder_layers.append(eqx.nn.Lambda(activation))
             in_dim = out_dim
-        
-        encoder_layers.append(
-            eqx.nn.Linear(in_dim, latent_dim, key=key_splits[len(hidden_dims)])
-        )
+
+        encoder_layers.append(eqx.nn.Linear(in_dim, latent_dim, key=key_splits[len(hidden_dims)]))
         self.encoder = eqx.nn.Sequential(tuple(encoder_layers))
 
         # ── Decoder: latent_dim → hidden_dims reversed → 784 ─────────────────
@@ -43,14 +41,12 @@ class AEv2(eqx.Module):
             decoder_layers.append(eqx.nn.Lambda(activation))
             in_dim = out_dim
         # final projection to 784
-        decoder_layers.append(
-            eqx.nn.Linear(in_dim, 28 * 28, key=key_splits[offset + len(decoder_dims)])
-        )
+        decoder_layers.append(eqx.nn.Linear(in_dim, 28 * 28, key=key_splits[offset + len(decoder_dims)]))
         decoder_layers.append(eqx.nn.Lambda(output_activation))
         self.decoder = eqx.nn.Sequential(tuple(decoder_layers))
 
     def __call__(self, x):
-        z   = self.encoder(x)
+        z = self.encoder(x)
         out = self.decoder(z)
         return out, z
 

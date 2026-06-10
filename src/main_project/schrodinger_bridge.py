@@ -18,6 +18,7 @@ from main_project.data import getData, getDataloader
 from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION
 import time
 
+
 @jax.jit
 def cdist_euclidean(x: jax.Array, y: jax.Array) -> jax.Array:
     return jnp.sqrt(jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1))
@@ -61,7 +62,6 @@ class SchrodingerBridge:
         weights_x: Optional[jnp.array] = None,
         weights_y: Optional[jnp.array] = None,
     ) -> "SchrodingerBridge":
-
         S = jnp.asarray(latent_source, dtype=jnp.float32)
         D = jnp.asarray(latent_target, dtype=jnp.float32)
 
@@ -95,15 +95,15 @@ class SchrodingerBridge:
 
             # Forward pass — enforce source marginal
             for i in tqdm(range(self.n_steps - 1), desc="  Forward ", leave=False):
-                t_step   = self.t[i + 1] - self.t[i]
-                K        = gaussian_kernel(self.S, self.D, t_step, self.sigma, self.d)
+                t_step = self.t[i + 1] - self.t[i]
+                K = gaussian_kernel(self.S, self.D, t_step, self.sigma, self.d)
                 v_scaled = self.weights_y * jnp.exp(self.log_v[i + 1])
                 self.log_u = self.log_u.at[i].set(jnp.log(self.weights_x) - jnp.log(K @ v_scaled + 1e-16))
 
             # Backward pass — enforce target marginal
             for i in tqdm(range(self.n_steps - 1, 0, -1), desc="  Backward", leave=False):
-                t_step   = self.t[i] - self.t[i - 1]
-                K        = gaussian_kernel(self.S, self.D, t_step, self.sigma, self.d)
+                t_step = self.t[i] - self.t[i - 1]
+                K = gaussian_kernel(self.S, self.D, t_step, self.sigma, self.d)
                 u_scaled = self.weights_x * jnp.exp(self.log_u[i - 1])
                 self.log_v = self.log_v.at[i].set(jnp.log(self.weights_y) - jnp.log(K.T @ u_scaled + 1e-16))
 
@@ -143,11 +143,8 @@ class SchrodingerBridge:
             trajectories[s, 0] = x_current
 
             for i in range(self.n_steps - 1):
-                t_step = float(self.t[i+1] - self.t[i])
-                K      = np.array(gaussian_kernel(
-                            jnp.array(x_current[None]),
-                            self.D, t_step, self.sigma, self.d
-                        ))  # [1, n]
+                t_step = float(self.t[i + 1] - self.t[i])
+                K = np.array(gaussian_kernel(jnp.array(x_current[None]), self.D, t_step, self.sigma, self.d))  # [1, n]
 
                 # Use learned v potential to weight transitions — this is the curvature
                 v_scaled = np.array(self.weights_y) * np.exp(np.array(self.log_v[i + 1]))
@@ -158,8 +155,8 @@ class SchrodingerBridge:
                 weights = weights / weights.sum()
 
                 # Sample next anchor point from target according to weights
-                j        = np.random.choice(len(self.D), p=weights)
-                anchor   = np.array(self.D[j])
+                j = np.random.choice(len(self.D), p=weights)
+                anchor = np.array(self.D[j])
 
                 # Step toward anchor with small Brownian noise
                 key, sub = jax.random.split(key)
@@ -220,34 +217,32 @@ class SchrodingerBridge:
 
         S_np = np.array(self.S)
         D_np = np.array(self.D)
-        d    = S_np.shape[1]
+        d = S_np.shape[1]
 
         # --- Project to 2D if needed ---
         if d > 2:
             all_points = np.vstack([S_np, D_np])
-            pca        = PCA(n_components=2).fit(all_points)
-            S_2d       = pca.transform(S_np)
-            D_2d       = pca.transform(D_np)
-            paths_2d   = np.stack([
-                pca.transform(trajectories[s])   # [n_steps, 2]
-                for s in range(len(trajectories))
-            ])
+            pca = PCA(n_components=2).fit(all_points)
+            S_2d = pca.transform(S_np)
+            D_2d = pca.transform(D_np)
+            paths_2d = np.stack(
+                [
+                    pca.transform(trajectories[s])  # [n_steps, 2]
+                    for s in range(len(trajectories))
+                ]
+            )
             axis_labels = ("PC1", "PC2")
         else:
-            S_2d       = S_np
-            D_2d       = D_np
-            paths_2d   = trajectories[:, :, :2]
+            S_2d = S_np
+            D_2d = D_np
+            paths_2d = trajectories[:, :, :2]
             axis_labels = ("z₁", "z₂")
 
         fig, ax = plt.subplots(figsize=(9, 7))
 
         # --- Background cloud: all source and target points ---
-        ax.scatter(S_2d[:, 0], S_2d[:, 1],
-                color="steelblue", alpha=0.15, s=point_size, zorder=0,
-                label="Source (all)")
-        ax.scatter(D_2d[:, 0], D_2d[:, 1],
-                color="coral", alpha=0.15, s=point_size, zorder=0,
-                label="Target (all)")
+        ax.scatter(S_2d[:, 0], S_2d[:, 1], color="steelblue", alpha=0.15, s=point_size, zorder=0, label="Source (all)")
+        ax.scatter(D_2d[:, 0], D_2d[:, 1], color="coral", alpha=0.15, s=point_size, zorder=0, label="Target (all)")
 
         # --- Draw each sampled trajectory ---
         for s in range(min(n_display, len(paths_2d))):
@@ -263,13 +258,13 @@ class SchrodingerBridge:
 
             # Source endpoint
             x0 = S_2d[source_idx[s]]
-            ax.scatter(*x0, color="steelblue", edgecolors="black",
-                    s=60, zorder=4, label="Source point" if s == 0 else "")
+            ax.scatter(
+                *x0, color="steelblue", edgecolors="black", s=60, zorder=4, label="Source point" if s == 0 else ""
+            )
 
             # Target endpoint
             x1 = D_2d[target_idx[s]]
-            ax.scatter(*x1, color="coral", edgecolors="black",
-                    s=60, zorder=4, label="Target point" if s == 0 else "")
+            ax.scatter(*x1, color="coral", edgecolors="black", s=60, zorder=4, label="Target point" if s == 0 else "")
 
             # Arrow source → target
             ax.annotate("", xy=x1, xytext=x0, arrowprops=dict(arrowstyle="->", color="black", alpha=0.4, lw=0.8))
@@ -290,7 +285,20 @@ class SchrodingerBridge:
         plt.show()
 
 
-# ── Test ─────────────────────────────────────────────────────────────────────
+def run_sb(source, target):
+    weights_x = jnp.array(density_weights(np.array(source), k=5))
+    weights_y = jnp.array(density_weights(np.array(target), k=5))
+    bridge = SchrodingerBridge(n_steps=20, sigma=0.5, max_iter=100, tol=1e-6)
+    bridge.fit(
+        latent_source=source,
+        latent_target=target,
+        weights_x=weights_x,
+        weights_y=weights_y,
+    )
+    P = bridge.get_transport_plan()
+    jax.block_until_ready(P)
+    return bridge, P
+
 
 if __name__ == "__main__":
     model = load(name="ae_best_model_lat2", path="models")
@@ -306,11 +314,9 @@ if __name__ == "__main__":
     source_arr = jnp.array(np.stack([np.array(img).flatten() for img in source_data]))
     target_arr = jnp.array(np.stack([np.array(img).flatten() for img in target_data]))
 
-
     def recon(x):
         r, z = model(x)
         return r, z
-
 
     latent_source = jax.vmap(recon)(source_arr)[1]
     latent_target = jax.vmap(recon)(target_arr)[1]
@@ -329,5 +335,3 @@ if __name__ == "__main__":
     result = bridge.sample_trajectories(P=P, model=model, n_samples=10)
     bridge.plot_trajectories(result, n_display=5)
     bridge.plot_latent_paths(result, n_display=1)
-
-

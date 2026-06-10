@@ -23,6 +23,7 @@ from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POI
 gamma = 1e-3
 stop_threshold = 1e-5
 
+
 @jax.jit
 def cdist_euclidean_v0(x: jax.Array, y: jax.Array) -> jax.Array:
     """Computes pairwise Euclidean distances between rows of x and y.
@@ -38,13 +39,14 @@ def cdist_euclidean_v0(x: jax.Array, y: jax.Array) -> jax.Array:
 
 
 @jax.jit
-def cdist_euclidean(x, y): #More efficient, since it written out
-    x_sq = jnp.sum(x ** 2, axis=1)        # (N,)
-    y_sq = jnp.sum(y ** 2, axis=1)        # (M,)
-    cross = x @ y.T                        # (N, M)  — efficient BLAS matmul
+def cdist_euclidean(x, y):  # More efficient, since it written out
+    x_sq = jnp.sum(x**2, axis=1)  # (N,)
+    y_sq = jnp.sum(y**2, axis=1)  # (M,)
+    cross = x @ y.T  # (N, M)  — efficient BLAS matmul
     sq_dists = x_sq[:, None] + y_sq[None, :] - 2 * cross
-    sq_dists = jnp.clip(sq_dists, 0.0)    # numerical safety before sqrt
+    sq_dists = jnp.clip(sq_dists, 0.0)  # numerical safety before sqrt
     return jnp.sqrt(sq_dists)
+
 
 def sinkhorn_simple(
     s: jax.Array,
@@ -109,30 +111,37 @@ def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000, stop_thresh=1e-5, verbose=F
     return P, u, v, iter
 
 
-
-
-def run_sinkhorn_by_model(model):
+def load_source_and_target_arrays():
     training_data, _ = getData()
     train_loader = getDataloader(training_data)
 
-    start_data = []
+    source_data = []
     target_data = []
 
     for x, y in train_loader:
-        start_mask = y == 0
+        source_mask = y == 0
         target_mask = y == 1
-        start_data.extend(x[start_mask])
+        source_data.extend(x[source_mask])
         target_data.extend(x[target_mask])
 
-    # Stack and flatten to [n, 784] as JAX arrays
-    source_arr = jnp.asarray(torch.stack(start_data).reshape(len(start_data), -1).numpy())
+    source_arr = jnp.asarray(torch.stack(source_data).reshape(len(source_data), -1).numpy())
     target_arr = jnp.asarray(torch.stack(target_data).reshape(len(target_data), -1).numpy())
+
+    min_count = min(source_arr.shape[0], target_arr.shape[0])
+    source_arr = source_arr[:min_count]
+    target_arr = target_arr[:min_count]
+
+    return source_arr, target_arr
+
+
+def run_sinkhorn_by_model(model):
+    source_arr, target_arr = load_source_and_target_arrays()
 
     def recon(x):
         recon, z = model(x)
         return recon, z
 
-    #Gets latent representation of source and target distributions
+    # Gets latent representation of source and target distributions
     latent_source = jax.vmap(recon)(source_arr)[1]  # [n, latent_dim]
     latent_target = jax.vmap(recon)(target_arr)[1]  # [m, latent_dim]
 
@@ -147,13 +156,13 @@ def run_sinkhorn_by_model(model):
     d = jnp.ones(latent_target.shape[0]) / latent_target.shape[0]
 
     # Now uniform weights work fine — equal n and m
-    T, u, v, iter = sinkhorn_log(C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=stop_threshold, verbose=True)
+    T, u, v, iter = sinkhorn_log(
+        C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=stop_threshold, verbose=True
+    )
 
-    #print(f"Sinkhorn converged in {iter} iterations with gamma={gamma} and threshold={stop_threshold}")
+    # print(f"Sinkhorn converged in {iter} iterations with gamma={gamma} and threshold={stop_threshold}")
 
     return latent_source, latent_target, T, u, v, iter
-
-
 
 
 def get_probability_y_given_x(T, index):
@@ -162,25 +171,22 @@ def get_probability_y_given_x(T, index):
 
 
 def main():
-
     running_times = {}
 
-    #warmup_jax(n=MAX_POINTS, dim=MODELS_DIM[0]) run only when interested in running time
-    for dim in MODELS_DIM: 
+    # warmup_jax(n=MAX_POINTS, dim=MODELS_DIM[0]) run only when interested in running time
+    for dim in MODELS_DIM:
         model_name = f"ae_model_dim_{dim}"
         start = time.perf_counter()
         print("Saving sinkhorn transformation for", model_name)
-        #save_sinkhorn_transformation(model_name = model_name, save =True)
+        # save_sinkhorn_transformation(model_name = model_name, save =True)
 
-        running_times[dim] = time.perf_counter()-start
+        running_times[dim] = time.perf_counter() - start
 
-    #save_sinkhorn_transformation_without_ae()
-    
+    # save_sinkhorn_transformation_without_ae()
+
     for dim, t in running_times.items():
         print(f"dim={dim:4d}  took {t:.2f}s")
 
 
 if __name__ == "__main__":
     main()
-
-

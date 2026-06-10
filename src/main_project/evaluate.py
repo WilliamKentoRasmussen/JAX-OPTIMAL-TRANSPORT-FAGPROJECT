@@ -77,40 +77,39 @@ def evaluate_latent_space_knn(latent_array, labels):
     return knn_acc
 
 
+columns = "Fraction of transport", "MDD", "Confidence of Classifier"
 
-columns = "Fraction of transport","MDD", "Confidence of Classifier"
+
 def evaluate_by_model(model):
-    source_img, target_img, expected_target_img, intermediate_images = np.load(f"data/{model}/original_images.npy"),np.load(f"data/{model}/target_images.npy"), np.load(f"data/{model}/expected_target_images.npy"), np.load(f"data/{model}/intermediate_images.npy")
+    source_img, target_img, expected_target_img, intermediate_images = (
+        np.load(f"data/{model}/original_images.npy"),
+        np.load(f"data/{model}/target_images.npy"),
+        np.load(f"data/{model}/expected_target_images.npy"),
+        np.load(f"data/{model}/intermediate_images.npy"),
+    )
 
     intermediate_images = intermediate_images.transpose(1, 0, 2)  # Corrects order for easier plotting
 
     data = []
     for frac, imgs in zip(INTERMEDIATE_FRACTIONS, intermediate_images):
-
-   
-        
         mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="rbf")
         classifier_conf = classifier_confidence(imgs, 1)
 
-        data.append([frac, mmd,classifier_conf[1]])
+        data.append([frac, mmd, classifier_conf[1]])
 
-        #plot_transport_images(imgs, target_img, n=5, title=f"MMD score of {mmd.item()} and classification confidence of {classifier_conf[1]}")
+        # plot_transport_images(imgs, target_img, n=5, title=f"MMD score of {mmd.item()} and classification confidence of {classifier_conf[1]}")
 
     df = pd.DataFrame(data, columns=columns)
-
 
     print(df)
     print("\n\n\n")
     df.to_csv(f"data/{model}/evalution.csv")
-    #print(df.to_latex())
-
-
-
+    # print(df.to_latex())
 
 
 def evaluate_sb_by_model(model):
-    decoded = np.load(f"data/sb_{model}/decoded.npy")          # (n_samples, n_steps, 784)
-    target_img = np.load(f"data/{model}/target_images.npy")    # reuse sinkhorn's target
+    decoded = np.load(f"data/sb_{model}/decoded.npy")  # (n_samples, n_steps, 784)
+    target_img = np.load(f"data/{model}/target_images.npy")  # reuse sinkhorn's target
 
     # decoded is already (n_samples, n_steps, 784) — transpose to (n_steps, n_samples, 784)
     # to match the same iteration pattern as intermediate_images
@@ -143,8 +142,6 @@ def run_evaluation():
         evaluate_sb_by_model(model=model_name)
 
 
-
 if __name__ == "__main__":
-    #Plotting
+    # Plotting
     run_evaluation()
-    

@@ -16,12 +16,13 @@ from tqdm import tqdm
 
 
 class Trainer:
-    def __init__(self, model, optimizer,lambda_l2):
+    def __init__(self, model, optimizer, lambda_l2):
         self.model = model
         self.optimizer = optimizer
         self.lambda_l2 = lambda_l2
+
     @eqx.filter_jit
-    def loss_fn(self,model, x):
+    def loss_fn(self, model, x):
         recon, z = jax.vmap(model)(x)
         recon_loss = jnp.mean(optax.losses.squared_error(recon, x))
         # z shape: (batch, 784)
@@ -29,15 +30,18 @@ class Trainer:
         # print(recon_loss)
         loss = recon_loss + self.lambda_l2 * latent_l2
         return loss
+
     @eqx.filter_jit
     def train_step(self, model, opt_state, x):
         loss, grads = eqx.filter_value_and_grad(self.loss_fn)(model, x)
         updates, opt_state = self.optimizer.update(grads, opt_state, params=eqx.filter(model, eqx.is_array))
         model = eqx.apply_updates(model, updates)
         return model, opt_state, loss
+
     @eqx.filter_jit
     def val_step(self, model, x):
         return self.loss_fn(model, x)
+
     def evaluate(self, model, dataloader):
         total_loss = 0
         num_batches = 0
@@ -48,7 +52,8 @@ class Trainer:
             total_loss += float(loss)
             num_batches += 1
         return total_loss / num_batches
-    def train(self,epochs=20, val_split=0.2, model=AEv2(key=jr.PRNGKey(0)), model_name="ae_best_model"):
+
+    def train(self, epochs=20, val_split=0.2, model=AEv2(key=jr.PRNGKey(0)), model_name="ae_best_model"):
         # Load data
         training_data, test_data = getData()
         print(f"training data is {type(training_data)}")
