@@ -183,3 +183,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 *.npy
+data/
+figures/
+models/
+training_history.csv
+*.npy
+*.eqx
+ae_bo.db
