@@ -156,7 +156,7 @@ def warmup_jax(n, dim):
     jax.block_until_ready(T)
 
 
-def main():
+def save_transformations():
     running_times_sinkhorn = {}
     running_times_sb = {}
 
@@ -181,4 +181,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    save_transformations()
