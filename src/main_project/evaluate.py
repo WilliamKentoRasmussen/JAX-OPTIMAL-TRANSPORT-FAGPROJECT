@@ -22,6 +22,7 @@ from scipy.linalg import sqrtm
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
 from main_project.visualize import plot_transport_images
+from main_project.optimal_transport import get_trajectory
 from main_project.utils import load
 from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS
 
@@ -62,23 +63,24 @@ def MMD(x: Array, y: Array, kernel):
 
     XX, YY, XY = (jnp.zeros_like(xx), jnp.zeros_like(xx), jnp.zeros_like(xx))
 
-    # Turns distances into similarity scores betweem the distributions
-    if kernel == "multiscale":
-        # The standard devisation is unkown, so having multiple different bandwidth makes the test sentitive to multiple cases
-        bandwidth_range = [0.2, 0.5, 0.9, 1.3]
-        for a in bandwidth_range:
-            XX += a**2 * (a**2 + dxx) ** -1
-            YY += a**2 * (a**2 + dyy) ** -1
-            XY += a**2 * (a**2 + dxy) ** -1
+    # # Turns distances into similarity scores betweem the distributions
+    # if kernel == "multiscale":
+    #     # The standard devisation is unkown, so having multiple different bandwidth makes the test sentitive to multiple cases
+    #     bandwidth_range = [0.2, 0.5, 0.9, 1.3]
+    #     for a in bandwidth_range:
+    #         XX += a**2 * (a**2 + dxx) ** -1
+    #         YY += a**2 * (a**2 + dyy) ** -1
+    #         XY += a**2 * (a**2 + dxy) ** -1
 
     if kernel == "rbf":
         bandwidth_range = [10, 15, 20, 50]
         for a in bandwidth_range:
-            XX += jnp.exp(-0.5 * dxx / a)
-            YY += jnp.exp(-0.5 * dyy / a)
-            XY += jnp.exp(-0.5 * dxy / a)
+            XX += jnp.exp(-0.5 * dxx / a**2)
+            YY += jnp.exp(-0.5 * dyy / a**2)
+            XY += jnp.exp(-0.5 * dxy / a**2)
 
     # MMD² = E[k(x,x')] + E[k(y,y')] − 2·E[k(x,y)]
+    
     return jnp.mean(XX + YY - 2.0 * XY)
 
 
@@ -108,7 +110,7 @@ def evaluate_latent_space_knn(latent_array, labels):
 columns = "Fraction of transport", "MDD", "Confidence of Classifier", "FID"
 
 
-def evaluate_by_model(model):
+def evaluate_by_model_in_image_space(model):
     source_img, target_img, expected_target_img, intermediate_images = (
         np.load(f"data/{model}/original_images.npy"),
         np.load(f"data/{model}/target_images.npy"),
@@ -131,6 +133,15 @@ def evaluate_by_model(model):
     print("\n\n\n")
     df.to_csv(f"data/{model}/evalution.csv")
     # print(df.to_latex())
+
+def evaluate_by_model_in_latent_space(model):
+    y_original = np.load(f"data/{model}/y_original.npy")
+    expected_target = np.load(f"data/{model}/expected_target.npy")
+    
+    mmd = MMD(jnp.asarray(y_original), jnp.asarray(expected_target), kernel="rbf")
+
+    print(mmd)
+
 
 
 def evaluate_sb_by_model(model):
@@ -163,10 +174,10 @@ def run_evaluation():
         model_name = f"ae_model_dim_{dim}"
 
         print("Evaluating Sinkhorn model", model_name, "\n")
-        evaluate_by_model(model=model_name)
+        evaluate_by_model_in_latent_space(model=model_name)
 
-        print("Evaluating Schrödinger Bridge model", model_name, "\n")
-        evaluate_sb_by_model(model=model_name)
+        # print("Evaluating Schrödinger Bridge model", model_name, "\n")
+        # evaluate_sb_by_model(model=model_name)
 
 
 if __name__ == "__main__":

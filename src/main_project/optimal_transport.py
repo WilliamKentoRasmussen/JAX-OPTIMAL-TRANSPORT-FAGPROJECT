@@ -39,16 +39,18 @@ def load_model(model_name: str) -> AEv2:
     return load(name=model_name, path="models", latent_dim=latent_dim)  #
 
 
-def get_trajectory(source, target, T, decoder=None):
+def get_trajectory(source, target, P, decoder=None,latent=False):
     source_images = []
     target_images = []
     expected_target_images = []
     intermediate_images = []
+    expected_target_latent = []
+    original_target_latent = []
 
     n_points = min(MAX_POINTS, len(source))
 
     for i in range(n_points):
-        p_y_given_x = get_probability_y_given_x(T, i)
+        p_y_given_x = get_probability_y_given_x(P, i)
 
         x_star = jnp.array(source[i].squeeze())
         y_point = jnp.array(target[i].squeeze())
@@ -58,35 +60,54 @@ def get_trajectory(source, target, T, decoder=None):
 
         intermediates = [np.array(decode((1 - f) * x_star + f * expected_target)) for f in INTERMEDIATE_FRACTIONS]
 
+
+
+        expected_target_latent.append(expected_target)
+        original_target_latent.append(y_point)
         source_images.append(np.array(decode(x_star)))
         target_images.append(np.array(decode(y_point)))
         expected_target_images.append(np.array(decode(expected_target)))
         intermediate_images.append(intermediates)
+    if latent:
+        return {"y_original": np.array(original_target_latent),
+        "expected_target": np.array(expected_target_latent)}
+    else:
+        return {        
+            "original_images": np.array(source_images),
+            "target_images": np.array(target_images),
+            "expected_target_images": np.array(expected_target_images),
+            "intermediate_images": np.array(intermediate_images),
+        }
 
-    return {
-        "original_images": np.array(source_images),
-        "target_images": np.array(target_images),
-        "expected_target_images": np.array(expected_target_images),
-        "intermediate_images": np.array(intermediate_images),
-    }
 
-
-def save_sinkhorn_transformation(model_name, save=True):
+def save_sinkhorn_transformation(model_name, save=True, latent=False):
     model = load_model(model_name=model_name)  # ae_best_model_lat2
     t0 = time.perf_counter()
-    latent_source, latent_target, T, u, v, iter = run_sinkhorn_by_model(model)
+    latent_source, latent_target, P, u, v, iter = run_sinkhorn_by_model(model)
     t1 = time.perf_counter()
-    trajectory = get_trajectory(latent_source, latent_target, T=T, decoder=model.decoder)
-    t2 = time.perf_counter()
+    if latent:
+        trajectory= get_trajectory(latent_source, latent_target, P=P, decoder=model.decoder, latent=latent)
+        t2 = time.perf_counter()
+        print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
+        if save:
+            save_dir = f"data/{model_name}"
+            os.makedirs(save_dir, exist_ok=True)
+            np.save(f"{save_dir}/y_original.npy", trajectory["y_original"])
+            np.save(f"{save_dir}/expected_target.npy", trajectory["expected_target"])
+            
 
-    print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
+    else:
+        trajectory= get_trajectory(latent_source, latent_target, P=P, decoder=model.decoder)
+        t2 = time.perf_counter()
+        print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
+        if save:
+            save_dir = f"data/{model_name}"
+            os.makedirs(save_dir, exist_ok=True)
 
-    if save:
-        save_dir = f"data/{model_name}"
-        os.makedirs(save_dir, exist_ok=True)
+            for img_name, img_matrix in trajectory.items():
+                np.save(f"{save_dir}/{img_name}.npy", np.array(img_matrix))
 
-        for img_name, img_matrix in trajectory.items():
-            np.save(f"{save_dir}/{img_name}.npy", np.array(img_matrix))
+
 
 
 def save_sinkhorn_transformation_without_ae(save=True):
@@ -95,11 +116,11 @@ def save_sinkhorn_transformation_without_ae(save=True):
     C = cdist_euclidean(source_arr, target_arr)
     s = jnp.ones(source_arr.shape[0]) / source_arr.shape[0]
     d = jnp.ones(target_arr.shape[0]) / target_arr.shape[0]
-    T, u, v, iter = sinkhorn_log(
+    P, u, v, iter = sinkhorn_log(
         C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=stop_threshold, verbose=True
     )
     t1 = time.perf_counter()
-    trajectory = get_trajectory(source_arr, target_arr, T=T, decoder=None)
+    trajectory = get_trajectory(source_arr, target_arr, P=P, decoder=None)
     t2 = time.perf_counter()
     print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
 
@@ -124,6 +145,8 @@ def encode_with_model(model: AEv2, source_arr, target_arr):
     latent_target = latent_target[:min_count]
 
     return latent_source, latent_target
+
+
 
 
 def save_sb_transformation(model_name, save=True):
@@ -167,17 +190,17 @@ def save_transformations():
         print(f"\n--- dim={dim} ---")
 
         start = time.perf_counter()
-        save_sinkhorn_transformation(model_name=model_name, save=True)
+        save_sinkhorn_transformation(model_name=model_name, save=True, latent=True)
         running_times_sinkhorn[dim] = time.perf_counter() - start
+    
+    #     start = time.perf_counter()
+    #     save_sb_transformation(model_name=model_name, save=True)
+    #     running_times_sb[dim] = time.perf_counter() - start
 
-        start = time.perf_counter()
-        save_sb_transformation(model_name=model_name, save=True)
-        running_times_sb[dim] = time.perf_counter() - start
-
-    print("\n--- Summary ---")
-    print(f"{'dim':>6}  {'sinkhorn':>12}  {'schr. bridge':>12}")
-    for dim in MODELS_DIM:
-        print(f"{dim:>6}  {running_times_sinkhorn[dim]:>10.2f}s  {running_times_sb[dim]:>10.2f}s")
+    # print("\n--- Summary ---")
+    # print(f"{'dim':>6}  {'sinkhorn':>12}  {'schr. bridge':>12}")
+    # for dim in MODELS_DIM:
+    #     print(f"{dim:>6}  {running_times_sinkhorn[dim]:>10.2f}s  {running_times_sb[dim]:>10.2f}s")
 
 
 if __name__ == "__main__":
