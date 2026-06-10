@@ -8,6 +8,17 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import cross_val_score
 import pandas as pd
 
+
+
+# example of calculating the frechet inception distance
+import numpy
+from numpy import cov
+from numpy import trace
+from numpy import iscomplexobj
+from numpy.random import random
+from scipy.linalg import sqrtm
+
+
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
 from main_project.visualize import plot_transport_images
@@ -18,6 +29,23 @@ from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POI
 SEED = 5678
 key = jax.random.PRNGKey(SEED)
 key, subkey = jax.random.split(key, 2)
+
+
+#calculate frechet inception distance
+def calculate_fid(act1, act2):
+	# calculate mean and covariance statistics
+	mu1, sigma1 = act1.mean(axis=0), cov(act1, rowvar=False)
+	mu2, sigma2 = act2.mean(axis=0), cov(act2, rowvar=False)
+	# calculate sum squared difference between means
+	ssdiff = numpy.sum((mu1 - mu2)**2.0)
+	# calculate sqrt of product between cov
+	covmean = sqrtm(sigma1.dot(sigma2))
+	# check and correct imaginary numbers from sqrt
+	if iscomplexobj(covmean):
+		covmean = covmean.real
+	# calculate score
+	fid = ssdiff + trace(sigma1 + sigma2 - 2.0 * covmean)
+	return fid
 
 
 # https://www.onurtunali.com/ml/2019/03/08/maximum-mean-discrepancy-in-machine-learning.html
@@ -77,7 +105,7 @@ def evaluate_latent_space_knn(latent_array, labels):
     return knn_acc
 
 
-columns = "Fraction of transport", "MDD", "Confidence of Classifier"
+columns = "Fraction of transport", "MDD", "Confidence of Classifier", "FID"
 
 
 def evaluate_by_model(model):
@@ -94,10 +122,8 @@ def evaluate_by_model(model):
     for frac, imgs in zip(INTERMEDIATE_FRACTIONS, intermediate_images):
         mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="rbf")
         classifier_conf = classifier_confidence(imgs, 1)
-
-        data.append([frac, mmd, classifier_conf[1]])
-
-        # plot_transport_images(imgs, target_img, n=5, title=f"MMD score of {mmd.item()} and classification confidence of {classifier_conf[1]}")
+        fid = calculate_fid(np.asarray(imgs), np.asarray(target_img))
+        data.append([frac, mmd, classifier_conf[1], fid])
 
     df = pd.DataFrame(data, columns=columns)
 
@@ -122,9 +148,10 @@ def evaluate_sb_by_model(model):
     for t, imgs in zip(t_values, decoded):
         mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="rbf")
         classifier_conf = classifier_confidence(imgs, 1)
-        data.append([t, mmd, classifier_conf[1]])
+        fid = calculate_fid(np.asarray(imgs), np.asarray(target_img))
+        data.append([t, mmd, classifier_conf[1], fid])
 
-    df = pd.DataFrame(data, columns=["t (time step)", "MMD", "Confidence of Classifier"])
+    df = pd.DataFrame(data, columns=["t (time step)", "MMD", "Confidence of Classifier", "FID"])
 
     print(df)
     print("\n\n\n")
