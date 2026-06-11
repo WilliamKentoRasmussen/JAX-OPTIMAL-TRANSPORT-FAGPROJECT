@@ -135,7 +135,6 @@ class AETrainer:
         print(f"Test loss: {test_loss:.4f}")
 
         if re.match(r"ae_best_model_bo_\d+", model_name):
-            save(model=model, name=model_name)
             df = pd.DataFrame(history)
             df.to_csv(f"training_history_{model_name}.csv", index=False)
 

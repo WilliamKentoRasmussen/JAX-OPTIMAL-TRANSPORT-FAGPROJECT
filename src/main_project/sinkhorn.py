@@ -17,7 +17,7 @@ import time
 from main_project.model import AEv2
 from main_project.utils import load
 from main_project.data import getData, getDataloader
-from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION
+from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION
 
 
 gamma = 1e-3
@@ -91,36 +91,41 @@ def sinkhorn_simple(
     return P, u, v
 
 
-def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000, stop_thresh=1e-5, verbose=False):
+def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000, stop_thresh=1e-7, verbose=False):
     log_s = jnp.log(s)
     log_d = jnp.log(d)
-
     u = jnp.zeros_like(s)
     v = jnp.zeros_like(d)
-    iter = 0
 
-    for iter in tqdm(range(max_iters), "Sinkhorn iteration"):
+    for iter in tqdm(range(max_iters), desc="Sinkhorn iteration"):
+        u_prev = u   # ← save before update
+        v_prev = v   # ← save before update
+
         u = gamma * (log_s - jax.nn.logsumexp((v[None, :] - C) / gamma, axis=1))
         v = gamma * (log_d - jax.nn.logsumexp((u[:, None] - C) / gamma, axis=0))
-        iter += 1
 
-    # transport plan in log-space
+        if (jnp.max(jnp.abs(u_prev - u)) < stop_thresh and
+            jnp.max(jnp.abs(v_prev - v)) < stop_thresh):
+            if verbose:
+                print(f"Converged at iteration {iter}")
+            break
+
+    # Transport plan in log-space
     log_P = (u[:, None] + v[None, :] - C) / gamma
     P = jnp.exp(log_P)
-
     return P, u, v, iter
 
 
-def load_source_and_target_arrays():
-    training_data, _ = getData()
-    train_loader = getDataloader(training_data)
+def load_source_and_target_arrays(source_label=0, target_label=1):
+    _, test_data = getData()
+    test_loader = getDataloader(test_data)
 
     source_data = []
     target_data = []
 
-    for x, y in train_loader:
-        source_mask = y == 0
-        target_mask = y == 1
+    for x, y in test_loader:
+        source_mask = y == source_label
+        target_mask = y == target_label
         source_data.extend(x[source_mask])
         target_data.extend(x[target_mask])
 
@@ -134,7 +139,7 @@ def load_source_and_target_arrays():
     return source_arr, target_arr
 
 
-def run_sinkhorn_by_model(model):
+def run_sinkhorn_by_model(model,gamma,distance_metric="euclidean"):
     source_arr, target_arr = load_source_and_target_arrays()
 
     def recon(x):
@@ -150,36 +155,39 @@ def run_sinkhorn_by_model(model):
 
     latent_source = latent_source[:min_count]
     latent_target = latent_target[:min_count]
-
-    C = cdist_euclidean(latent_source, latent_target)
+    if distance_metric == "euclidean":
+        C = cdist_euclidean(latent_source, latent_target)
     s = jnp.ones(latent_source.shape[0]) / latent_source.shape[0]
     d = jnp.ones(latent_target.shape[0]) / latent_target.shape[0]
 
     # Now uniform weights work fine — equal n and m
-    T, u, v, iter = sinkhorn_log(
+    P, u, v, iter = sinkhorn_log(
         C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=stop_threshold, verbose=True
     )
 
     # print(f"Sinkhorn converged in {iter} iterations with gamma={gamma} and threshold={stop_threshold}")
 
-    return latent_source, latent_target, T, u, v, iter
+    return latent_source, latent_target, P, u, v, iter
 
 
-def get_probability_y_given_x(T, index):
-    p_y_given_x = T[index] / T[index].sum()
+def get_probability_y_given_x(P, index):
+    p_y_given_x = P[index] / P[index].sum()
     return p_y_given_x
 
 
 def main():
+    data = []
     running_times = {}
-
     # warmup_jax(n=MAX_POINTS, dim=MODELS_DIM[0]) run only when interested in running time
     for dim in MODELS_DIM:
-        model_name = f"ae_model_dim_{dim}"
+        model_name = f"ae_best_model_{dim}"
+        for gamma in GAMMA:
+            model = load(model_name)
+            latent_source, latent_target, P, u, v, iter = run_sinkhorn_by_model(model=model,gamma=gamma)
+            data.append((model_name, gamma, iter))
         start = time.perf_counter()
         print("Saving sinkhorn transformation for", model_name)
         # save_sinkhorn_transformation(model_name = model_name, save =True)
-
         running_times[dim] = time.perf_counter() - start
 
     # save_sinkhorn_transformation_without_ae()
