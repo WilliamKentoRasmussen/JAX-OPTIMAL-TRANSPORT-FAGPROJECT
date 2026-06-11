@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.decomposition import PCA
-from main_project.utils import load
+from main_project.utils import load, load_with_hyperparams
 from main_project.data import getData  # fixed
 
 from main_project.train import train_classifier
@@ -599,8 +599,8 @@ def run_all_eval_plots(dims=MODELS_DIM):
  
 if __name__ == "__main__":
     training_data, test_data = getData()
-    loss_data = pd.read_csv("data/training_history.csv")
-    model = load(name="ae_best_model_lat2", path="models")
+    loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
+    model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
     plot_training_loss(loss_data)
     plot_reconstruction(training_data, model)
     plot_latent_clusters(training_data, model)
