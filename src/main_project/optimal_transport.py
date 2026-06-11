@@ -156,7 +156,7 @@ def warmup_jax(n, dim):
     jax.block_until_ready(T)
 
 
-def save_transformations():
+def save_transformations(run_sinkhorn = True, run_sb = True):
     running_times_sinkhorn = {}
     running_times_sb = {}
 
@@ -166,13 +166,15 @@ def save_transformations():
         model_name = f"ae_model_dim_{dim}"
         print(f"\n--- dim={dim} ---")
 
-        start = time.perf_counter()
-        save_sinkhorn_transformation(model_name=model_name, save=True)
-        running_times_sinkhorn[dim] = time.perf_counter() - start
+        if(run_sinkhorn):
+            start = time.perf_counter()
+            save_sinkhorn_transformation(model_name=model_name, save=True)
+            running_times_sinkhorn[dim] = time.perf_counter() - start
 
-        start = time.perf_counter()
-        save_sb_transformation(model_name=model_name, save=True)
-        running_times_sb[dim] = time.perf_counter() - start
+        if(run_sb):
+            start = time.perf_counter()
+            save_sb_transformation(model_name=model_name, save=True)
+            running_times_sb[dim] = time.perf_counter() - start
 
     print("\n--- Summary ---")
     print(f"{'dim':>6}  {'sinkhorn':>12}  {'schr. bridge':>12}")
