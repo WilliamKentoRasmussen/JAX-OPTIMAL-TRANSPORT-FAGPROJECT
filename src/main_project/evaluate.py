@@ -24,7 +24,7 @@ from main_project.model import targetClassifier
 from main_project.visualize import plot_transport_images
 from main_project.optimal_transport import get_trajectory
 from main_project.utils import load
-from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS
+from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, GAMMA
 
 
 SEED = 5678
@@ -107,7 +107,7 @@ def evaluate_latent_space_knn(latent_array, labels):
     return knn_acc
 
 
-columns = "Fraction of transport", "MDD", "Confidence of Classifier", "FID"
+columns = ["Fraction of transport", "MMD", "Confidence of Classifier", "FID"]
 
 
 def evaluate_by_model_in_image_space(model):
@@ -118,20 +118,20 @@ def evaluate_by_model_in_image_space(model):
         np.load(f"data/{model}/intermediate_images.npy"),
     )
 
-    intermediate_images = intermediate_images.transpose(1, 0, 2)  # Corrects order for easier plotting
+    intermediate_images = intermediate_images.transpose(1, 0, 2)  # (n_fracs, n_points, 784)
 
     data = []
     for frac, imgs in zip(INTERMEDIATE_FRACTIONS, intermediate_images):
         mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="rbf")
         classifier_conf = classifier_confidence(imgs, 1)
         fid = calculate_fid(np.asarray(imgs), np.asarray(target_img))
-        data.append([frac, mmd, classifier_conf[1], fid])
+        data.append([frac, float(mmd), float(jnp.mean(classifier_conf)), fid])
 
     df = pd.DataFrame(data, columns=columns)
 
     print(df)
     print("\n\n\n")
-    df.to_csv(f"data/{model}/evalution.csv")
+    df.to_csv(f"data/{model}/evaluation.csv", index=False)
     # print(df.to_latex())
 
 def evaluate_by_model_in_latent_space(model):
@@ -140,7 +140,7 @@ def evaluate_by_model_in_latent_space(model):
     
     mmd = MMD(jnp.asarray(y_original), jnp.asarray(expected_target), kernel="rbf")
 
-    print(mmd)
+    return mmd
 
 
 
@@ -170,16 +170,39 @@ def evaluate_sb_by_model(model):
 
 
 def run_evaluation():
+    summary = []
+
     for dim in MODELS_DIM:
-        model_name = f"ae_model_dim_{dim}"
+        model_name = f"ae_best_model_bo_{dim}"
 
-        print("Evaluating Sinkhorn model", model_name, "\n")
-        evaluate_by_model_in_latent_space(model=model_name)
+        for gamma in GAMMA:
+            folder_key = f"{model_name}_{gamma}"
+            print(f"\n--- dim={dim}, gamma={gamma} ---")
 
-        # print("Evaluating Schrödinger Bridge model", model_name, "\n")
-        # evaluate_sb_by_model(model=model_name)
+            # Latent space MMD
+            mmd_latent = evaluate_by_model_in_latent_space(model=folder_key)
+            print(f"  MMD latent: {float(mmd_latent):.6f}")
+
+            # Image space metrics (writes data/{folder_key}/evaluation.csv)
+            evaluate_by_model_in_image_space(model=folder_key)
+            img_df = pd.read_csv(f"data/{folder_key}/evaluation.csv")
+
+            for _, row in img_df.iterrows():
+                summary.append({
+                    "latent_dim": dim,
+                    "gamma": gamma,
+                    "fraction": row["Fraction of transport"],
+                    "mmd_latent": float(mmd_latent),
+                    "mmd_image": row["MMD"],
+                    "classifier_confidence": row["Confidence of Classifier"],
+                    "fid": row["FID"],
+                })
+
+    summary_df = pd.DataFrame(summary)
+    summary_df.to_csv("data/evaluation_summary.csv", index=False)
+    print("\n=== Summary ===")
+    print(summary_df.to_string())
 
 
 if __name__ == "__main__":
-    # Plotting
     run_evaluation()

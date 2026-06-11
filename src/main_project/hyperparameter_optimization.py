@@ -16,6 +16,7 @@ from main_project.trainnew import AETrainer
 from main_project.evaluate import MMD, classifier_confidence, evaluate_latent_space_knn
 from main_project.environment import INTERMEDIATE_FRACTIONS
 from environment import MODELS_DIM
+from main_project.utils import save_with_hyperparams
 import os
 #https://medium.com/@vikakbary/the-first-step-to-optuna-understanding-766e50488c67
 
@@ -76,9 +77,11 @@ arch_presets = {
         "medium2": [256, 256, 128, 64, 32],
         "large": [512, 256, 128, 64, 32],
         "large2": [512, 512, 256, 128, 64],
+        "large3": [512, 512, 512, 256, 128],
+        "large4": [512, 512, 512, 512, 256],
     }
 
-best_params = []
+best_parameters = []
 # ── Run ───────────────────────────────────────────────────────────────────────
 for latent_dim in MODELS_DIM:
     study = optuna.create_study(
@@ -89,7 +92,7 @@ for latent_dim in MODELS_DIM:
         load_if_exists=True,
     )
 
-    study.optimize(lambda trial: objective(trial, latent_dim=latent_dim), n_trials=20)
+    study.optimize(lambda trial: objective(trial, latent_dim=latent_dim), n_trials=30)
 
 
     best = study.best_trial
@@ -99,7 +102,7 @@ for latent_dim in MODELS_DIM:
     print(f"\nBest hyperparameters:")
     for k, v in best.params.items():
         print(f"  {k:15s}: {v}")
-    best_params.append((latent_dim, best.params))
+    best_parameters.append((latent_dim, best.params))
 
     print(f"\nValidation metrics:")
     print(f"  val_loss:           {best.user_attrs['val_loss']:.4f}")
@@ -125,6 +128,12 @@ for latent_dim in MODELS_DIM:
         model_name=f"ae_best_model_bo_{latent_dim}"
     )
     print(f"Final test loss: {final_test_loss:.4f}")
+    save_with_hyperparams(
+        model=final_model,
+        filename=f"ae_best_model_bo_{latent_dim}",
+        hidden_dims=arch_presets[best_params["arch"]],
+        latent_dim=latent_dim,
+    )
 
-df = pd.DataFrame(best_params, columns=["latent_dim", "best_params"])
+df = pd.DataFrame(best_parameters, columns=["latent_dim", "best_params"])
 df.to_csv("best_hyperparameters.csv", index=False)

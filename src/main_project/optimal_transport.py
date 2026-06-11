@@ -13,11 +13,11 @@ import os
 import jax.random as jr
 import re
 import time
-
+import pandas as pd
 from main_project.model import AEv2
-from main_project.utils import load
+from main_project.utils import load, load_with_hyperparams
 from main_project.data import getData, getDataloader
-from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION
+from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION,GAMMA
 
 from main_project.sinkhorn import (
     run_sinkhorn_by_model,
@@ -29,9 +29,8 @@ from main_project.sinkhorn import (
 
 from main_project.schrodinger_bridge import SchrodingerBridge, density_weights, run_sb
 
-gamma = 1e-3
 stop_threshold = 1e-5
-
+gamma = 1e-3
 
 def load_model(model_name: str) -> AEv2:
     latent_dim = int(re.search(r"_(\d+)", model_name).group(1))
@@ -80,32 +79,32 @@ def get_trajectory(source, target, P, decoder=None,latent=False):
         }
 
 
-def save_sinkhorn_transformation(model_name, save=True, latent=False):
-    model = load_model(model_name=model_name)  # ae_best_model_lat2
+def save_sinkhorn_transformation(model_name, save=True, latent_evaluate=False, gamma=1e-3):
+    model = load_with_hyperparams(name=model_name, path="models")
     t0 = time.perf_counter()
-    latent_source, latent_target, P, u, v, iter = run_sinkhorn_by_model(model)
+    latent_source, latent_target, P, u, v, iter = run_sinkhorn_by_model(model,gamma=gamma)
     t1 = time.perf_counter()
-    if latent:
-        trajectory= get_trajectory(latent_source, latent_target, P=P, decoder=model.decoder, latent=latent)
+    if latent_evaluate:
+        trajectory= get_trajectory(latent_source, latent_target, P=P, decoder=model.decoder, latent=latent_evaluate)
         t2 = time.perf_counter()
         print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
         if save:
-            save_dir = f"data/{model_name}"
+            save_dir = f"data/{model_name}_{gamma}"
             os.makedirs(save_dir, exist_ok=True)
             np.save(f"{save_dir}/y_original.npy", trajectory["y_original"])
             np.save(f"{save_dir}/expected_target.npy", trajectory["expected_target"])
-            
-
+            return iter
     else:
         trajectory= get_trajectory(latent_source, latent_target, P=P, decoder=model.decoder)
         t2 = time.perf_counter()
         print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
         if save:
-            save_dir = f"data/{model_name}"
+            save_dir = f"data/{model_name}_{gamma}"
             os.makedirs(save_dir, exist_ok=True)
 
             for img_name, img_matrix in trajectory.items():
                 np.save(f"{save_dir}/{img_name}.npy", np.array(img_matrix))
+            return iter
 
 
 
@@ -125,7 +124,7 @@ def save_sinkhorn_transformation_without_ae(save=True):
     print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
 
     if save:
-        save_dir = f"data/no_ae"
+        save_dir = f"data/no_ae_{gamma}"
         os.makedirs(save_dir, exist_ok=True)
 
         for img_name, img_matrix in trajectory.items():
@@ -175,33 +174,26 @@ def warmup_jax(n, dim):
     s = jnp.ones(n) / n
     d = jnp.ones(n) / n
     C = cdist_euclidean(dummy_x, dummy_y)
-    T, *_ = sinkhorn_log(s, d, C, gamma=gamma, max_iters=2)
-    jax.block_until_ready(T)
+    P, *_ = sinkhorn_log(s, d, C, gamma=gamma, max_iters=2)
+    jax.block_until_ready(P)
 
 
 def save_transformations():
-    running_times_sinkhorn = {}
-    running_times_sb = {}
-
-    # warmup_jax(n=MAX_POINTS, dim=MODELS_DIM[0])
+    data = []
 
     for dim in MODELS_DIM:
-        model_name = f"ae_model_dim_{dim}"
+        model_name = f"ae_best_model_bo_{dim}"
+
         print(f"\n--- dim={dim} ---")
+        for gamma in GAMMA:
+            print(f"  gamma={gamma}")
+            start = time.perf_counter()
+            iter = save_sinkhorn_transformation(model_name=model_name, save=True, latent_evaluate=True, gamma=gamma)
+            save_sinkhorn_transformation(model_name=model_name, save=True, latent_evaluate=False, gamma=gamma)
+            elapsed = time.perf_counter() - start
+            data.append((model_name, gamma, iter, elapsed))
 
-        start = time.perf_counter()
-        save_sinkhorn_transformation(model_name=model_name, save=True, latent=True)
-        running_times_sinkhorn[dim] = time.perf_counter() - start
-    
-    #     start = time.perf_counter()
-    #     save_sb_transformation(model_name=model_name, save=True)
-    #     running_times_sb[dim] = time.perf_counter() - start
-
-    # print("\n--- Summary ---")
-    # print(f"{'dim':>6}  {'sinkhorn':>12}  {'schr. bridge':>12}")
-    # for dim in MODELS_DIM:
-    #     print(f"{dim:>6}  {running_times_sinkhorn[dim]:>10.2f}s  {running_times_sb[dim]:>10.2f}s")
-
-
+    df = pd.DataFrame(data, columns=["model_name", "gamma", "sinkhorn_iterations", "sinkhorn_time"])
+    df.to_csv("sinkhorn_iterations_and_times.csv", index=False)
 if __name__ == "__main__":
     save_transformations()
