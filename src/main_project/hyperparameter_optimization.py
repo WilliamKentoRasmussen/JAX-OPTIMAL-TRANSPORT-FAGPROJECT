@@ -26,7 +26,7 @@ if os.path.exists("ae_bo.db"):
 def objective(trial,latent_dim=2):
 
     arch_name = trial.suggest_categorical(
-        "arch", ["small2", "small", "medium", "large", "large2", "medium2"]
+        "arch", ["small2", "small", "medium", "large", "large2", "medium2", "large3", "large4"]
     )  # try different architectures
     hidden_dim = arch_presets[arch_name]
     lr = trial.suggest_float(
@@ -92,7 +92,7 @@ for latent_dim in MODELS_DIM:
         load_if_exists=True,
     )
 
-    study.optimize(lambda trial: objective(trial, latent_dim=latent_dim), n_trials=30)
+    study.optimize(lambda trial: objective(trial, latent_dim=latent_dim), n_trials=20)
 
 
     best = study.best_trial
@@ -102,7 +102,7 @@ for latent_dim in MODELS_DIM:
     print(f"\nBest hyperparameters:")
     for k, v in best.params.items():
         print(f"  {k:15s}: {v}")
-    best_parameters.append((latent_dim, best.params))
+    
 
     print(f"\nValidation metrics:")
     print(f"  val_loss:           {best.user_attrs['val_loss']:.4f}")
@@ -134,6 +134,7 @@ for latent_dim in MODELS_DIM:
         hidden_dims=arch_presets[best_params["arch"]],
         latent_dim=latent_dim,
     )
+    best_parameters.append((latent_dim, best.params, final_test_loss))
 
-df = pd.DataFrame(best_parameters, columns=["latent_dim", "best_params"])
+df = pd.DataFrame(best_parameters, columns=["latent_dim", "best_params", "final_test_loss"])
 df.to_csv("best_hyperparameters.csv", index=False)

@@ -75,9 +75,9 @@ def MMD(x: Array, y: Array, kernel):
     if kernel == "rbf":
         bandwidth_range = [10, 15, 20, 50]
         for a in bandwidth_range:
-            XX += jnp.exp(-0.5 * dxx / a**2)
-            YY += jnp.exp(-0.5 * dyy / a**2)
-            XY += jnp.exp(-0.5 * dxy / a**2)
+            XX += jnp.exp(-0.5 * dxx / a)
+            YY += jnp.exp(-0.5 * dyy / a)
+            XY += jnp.exp(-0.5 * dxy / a)
 
     # MMD² = E[k(x,x')] + E[k(y,y')] − 2·E[k(x,y)]
     
@@ -105,7 +105,6 @@ def evaluate_latent_space_knn(latent_array, labels):
     classifier = KNeighborsClassifier(n_neighbors=6)  # 5 by default
     knn_acc = cross_val_score(classifier, latent_array, labels, cv=5).mean()
     return knn_acc
-
 
 columns = ["Fraction of transport", "MMD", "Confidence of Classifier", "FID"]
 

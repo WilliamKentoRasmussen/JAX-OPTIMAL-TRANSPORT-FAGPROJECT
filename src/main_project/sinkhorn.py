@@ -37,6 +37,15 @@ def cdist_euclidean_v0(x: jax.Array, y: jax.Array) -> jax.Array:
     """
     return jnp.sqrt(jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1))
 
+@jax.jit
+def cosine_similarity(x,y):
+    dot_product = jnp.dot(x,y)
+    x_norm = jnp.linalg.norm(x)
+    y_norm = jnp.linalg.norm(y)
+    similarity = dot_product/(x_norm*y_norm)
+    return similarity
+
+
 
 @jax.jit
 def cdist_euclidean(x, y):  # More efficient, since it written out
@@ -157,6 +166,8 @@ def run_sinkhorn_by_model(model,gamma,distance_metric="euclidean"):
     latent_target = latent_target[:min_count]
     if distance_metric == "euclidean":
         C = cdist_euclidean(latent_source, latent_target)
+    elif distance_metric == "cosine":
+        C = cosine_similarity(latent_source, latent_target)
     s = jnp.ones(latent_source.shape[0]) / latent_source.shape[0]
     d = jnp.ones(latent_target.shape[0]) / latent_target.shape[0]
 
