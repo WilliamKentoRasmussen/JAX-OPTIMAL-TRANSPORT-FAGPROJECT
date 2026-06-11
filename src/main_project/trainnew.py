@@ -1,3 +1,6 @@
+from pyexpat import model
+import re
+
 from main_project.model import AEv2
 import jax
 import jax.numpy as jnp
@@ -13,23 +16,46 @@ from torch.utils.data import DataLoader, Subset
 from main_project.train import classifier_loss_fn, val_step
 from main_project.utils import save
 from tqdm import tqdm
-
+import re
 
 class AETrainer:
-    def __init__(self, model, optimizer, lambda_l2):
+    def __init__(self, model, learning_rate, lambda_l2):
         self.model = model
-        self.optimizer = optimizer
+        self.optimizer = optax.adam(learning_rate)
         self.lambda_l2 = lambda_l2
+        # self.loss_name = loss_name
 
+    
+    # def loss_fn(self,model, x):
+    #     recon, z = jax.vmap(model)(x)
+        
+    #     if self.loss_name == "mse":
+    #         # standard — penalizes large errors heavily
+    #         recon_loss = jnp.mean((recon - x)**2)
+
+    #     elif self.loss_name == "mae":
+    #         # more robust to outliers — treats all errors equally
+    #         recon_loss = jnp.mean(jnp.abs(recon - x))
+
+
+    #     elif self.loss_name == "bce":
+    #         # binary cross entropy — natural for pixel values in [0,1]
+    #         # your decoder uses sigmoid so this is the correct paired loss
+    #         recon_loss = jnp.mean(
+    #             -x * jnp.log(recon + 1e-8) - (1 - x) * jnp.log(1 - recon + 1e-8)
+    #         )
+
+    #     latent_l2 = jnp.mean(jnp.sum(z**2, axis=-1))
+    #     return recon_loss + self.lambda_l2 * latent_l2
     @eqx.filter_jit
-    def loss_fn(self, model, x):
+    def loss_fn(self,model, x):
         recon, z = jax.vmap(model)(x)
-        recon_loss = jnp.mean(optax.losses.squared_error(recon, x))
-        # z shape: (batch, 784)
+        recon_loss = jnp.mean((recon - x)**2)
         latent_l2 = jnp.mean(jnp.sum(z**2, axis=-1))
-        # print(recon_loss)
-        loss = recon_loss + self.lambda_l2 * latent_l2
-        return loss
+        return recon_loss + self.lambda_l2 * latent_l2
+
+
+
 
     @eqx.filter_jit
     def train_step(self, model, opt_state, x):
@@ -108,10 +134,9 @@ class AETrainer:
         test_loss = self.evaluate(model, test_loader)
         print(f"Test loss: {test_loss:.4f}")
 
-        if model_name == "ae_best_model_bo":
-            save(model=model, name=model_name)
+        if re.match(r"ae_best_model_bo_\d+", model_name):
             df = pd.DataFrame(history)
-            df.to_csv("training_history.csv", index=False)
+            df.to_csv(f"training_history_{model_name}.csv", index=False)
 
         return model, history, test_loss
 

@@ -9,7 +9,6 @@ description = "Implementation of optimal transport on generative models in JAX"
 authors = [
   { name = "Kerem, Ma Markus, og William", email = "your@email.com" },
 ]
-license = { file = "LICENSE" }
 keywords = ["machine learning", "MLOps"]
 classifiers = [
   "Development Status :: 3 - Alpha",

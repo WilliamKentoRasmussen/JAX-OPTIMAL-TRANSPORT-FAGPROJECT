@@ -22,8 +22,9 @@ from scipy.linalg import sqrtm
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
 from main_project.visualize import plot_transport_images
+from main_project.optimal_transport import get_trajectory
 from main_project.utils import load
-from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS
+from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, GAMMA
 
 
 SEED = 5678
@@ -62,14 +63,14 @@ def MMD(x: Array, y: Array, kernel):
 
     XX, YY, XY = (jnp.zeros_like(xx), jnp.zeros_like(xx), jnp.zeros_like(xx))
 
-    # Turns distances into similarity scores betweem the distributions
-    if kernel == "multiscale":
-        # The standard devisation is unkown, so having multiple different bandwidth makes the test sentitive to multiple cases
-        bandwidth_range = [0.2, 0.5, 0.9, 1.3]
-        for a in bandwidth_range:
-            XX += a**2 * (a**2 + dxx) ** -1
-            YY += a**2 * (a**2 + dyy) ** -1
-            XY += a**2 * (a**2 + dxy) ** -1
+    # # Turns distances into similarity scores betweem the distributions
+    # if kernel == "multiscale":
+    #     # The standard devisation is unkown, so having multiple different bandwidth makes the test sentitive to multiple cases
+    #     bandwidth_range = [0.2, 0.5, 0.9, 1.3]
+    #     for a in bandwidth_range:
+    #         XX += a**2 * (a**2 + dxx) ** -1
+    #         YY += a**2 * (a**2 + dyy) ** -1
+    #         XY += a**2 * (a**2 + dxy) ** -1
 
     if kernel == "rbf":
         bandwidth_range = [10, 15, 20, 50]
@@ -79,6 +80,7 @@ def MMD(x: Array, y: Array, kernel):
             XY += jnp.exp(-0.5 * dxy / a)
 
     # MMD² = E[k(x,x')] + E[k(y,y')] − 2·E[k(x,y)]
+    
     return jnp.mean(XX + YY - 2.0 * XY)
 
 
@@ -104,11 +106,10 @@ def evaluate_latent_space_knn(latent_array, labels):
     knn_acc = cross_val_score(classifier, latent_array, labels, cv=5).mean()
     return knn_acc
 
+columns = ["Fraction of transport", "MMD", "Confidence of Classifier", "FID"]
 
-columns = "Fraction of transport", "MDD", "Confidence of Classifier", "FID"
 
-
-def evaluate_by_model(model):
+def evaluate_by_model_in_image_space(model):
     source_img, target_img, expected_target_img, intermediate_images = (
         np.load(f"data/{model}/original_images.npy"),
         np.load(f"data/{model}/target_images.npy"),
@@ -116,21 +117,30 @@ def evaluate_by_model(model):
         np.load(f"data/{model}/intermediate_images.npy"),
     )
 
-    intermediate_images = intermediate_images.transpose(1, 0, 2)  # Corrects order for easier plotting
+    intermediate_images = intermediate_images.transpose(1, 0, 2)  # (n_fracs, n_points, 784)
 
     data = []
     for frac, imgs in zip(INTERMEDIATE_FRACTIONS, intermediate_images):
         mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="rbf")
         classifier_conf = classifier_confidence(imgs, 1)
         fid = calculate_fid(np.asarray(imgs), np.asarray(target_img))
-        data.append([frac, mmd, classifier_conf[1], fid])
+        data.append([frac, float(mmd), float(jnp.mean(classifier_conf)), fid])
 
     df = pd.DataFrame(data, columns=columns)
 
     print(df)
     print("\n\n\n")
-    df.to_csv(f"data/{model}/evalution.csv")
+    df.to_csv(f"data/{model}/evaluation.csv", index=False)
     # print(df.to_latex())
+
+def evaluate_by_model_in_latent_space(model):
+    y_original = np.load(f"data/{model}/y_original.npy")
+    expected_target = np.load(f"data/{model}/expected_target.npy")
+    
+    mmd = MMD(jnp.asarray(y_original), jnp.asarray(expected_target), kernel="rbf")
+
+    return mmd
+
 
 
 def evaluate_sb_by_model(model):
@@ -159,16 +169,39 @@ def evaluate_sb_by_model(model):
 
 
 def run_evaluation():
+    summary = []
+
     for dim in MODELS_DIM:
-        model_name = f"ae_model_dim_{dim}"
+        model_name = f"ae_best_model_bo_{dim}"
 
-        print("Evaluating Sinkhorn model", model_name, "\n")
-        evaluate_by_model(model=model_name)
+        for gamma in GAMMA:
+            folder_key = f"{model_name}_{gamma}"
+            print(f"\n--- dim={dim}, gamma={gamma} ---")
 
-        print("Evaluating Schrödinger Bridge model", model_name, "\n")
-        evaluate_sb_by_model(model=model_name)
+            # Latent space MMD
+            mmd_latent = evaluate_by_model_in_latent_space(model=folder_key)
+            print(f"  MMD latent: {float(mmd_latent):.6f}")
+
+            # Image space metrics (writes data/{folder_key}/evaluation.csv)
+            evaluate_by_model_in_image_space(model=folder_key)
+            img_df = pd.read_csv(f"data/{folder_key}/evaluation.csv")
+
+            for _, row in img_df.iterrows():
+                summary.append({
+                    "latent_dim": dim,
+                    "gamma": gamma,
+                    "fraction": row["Fraction of transport"],
+                    "mmd_latent": float(mmd_latent),
+                    "mmd_image": row["MMD"],
+                    "classifier_confidence": row["Confidence of Classifier"],
+                    "fid": row["FID"],
+                })
+
+    summary_df = pd.DataFrame(summary)
+    summary_df.to_csv("data/evaluation_summary.csv", index=False)
+    print("\n=== Summary ===")
+    print(summary_df.to_string())
 
 
 if __name__ == "__main__":
-    # Plotting
     run_evaluation()
