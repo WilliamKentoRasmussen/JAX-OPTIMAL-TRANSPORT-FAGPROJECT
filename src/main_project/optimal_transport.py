@@ -22,7 +22,8 @@ from main_project.environment import (
     MODELS_DIM, 
     INTERMEDIATE_FRACTIONS, 
     MAX_POINTS, 
-    MAX_ITERATION, 
+    MAX_ITERATION,
+    STOP_THRESSHOLD, 
     LABELS, 
     SAVE_INTERMEDIATE,
     VERBOSE_OPTIMAL_TRANSPORT
@@ -38,7 +39,7 @@ from main_project.sinkhorn import (
 
 from main_project.schrodinger_bridge import SchrodingerBridge, density_weights, run_sb
 
-stop_threshold = 1e-5
+stop_threshold = STOP_THRESSHOLD
 gamma = 1e-3
 
 

@@ -170,7 +170,7 @@ def evaluate_by_model_in_image_space(sinkhorn_data, target_label, save_dir):
 
 
 def evaluate_by_model_in_latent_space(sinkhorn_data):
-    target = sinkhorn_data["y_original"] #changed to target now
+    target = sinkhorn_data["target"] #changed to target now y_original
     expected_target = sinkhorn_data["expected_target"]
     
     mmd = MMD(jnp.asarray(target), jnp.asarray(expected_target), kernel="rbf", is_latent = True)

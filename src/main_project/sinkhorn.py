@@ -17,11 +17,11 @@ import time
 from main_project.model import AEv2
 from main_project.utils import load
 from main_project.data import getData, getDataloader
-from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION, TQDM_SINKHORN,VERBOSE_OPTIMAL_TRANSPORT
+from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION, TQDM_SINKHORN,VERBOSE_OPTIMAL_TRANSPORT, STOP_THRESSHOLD
 
 
 gamma = 1e-3
-stop_threshold = 1e-5
+
 
 
 @jax.jit
@@ -173,7 +173,7 @@ def run_sinkhorn_by_model(model, gamma,distance_metric="euclidean", source_label
 
     # Now uniform weights work fine — equal n and m
     P, u, v, iter = sinkhorn_log(
-        C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=stop_threshold, verbose=True
+        C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=STOP_THRESSHOLD, verbose=True
     )
 
     # print(f"Sinkhorn converged in {iter} iterations with gamma={gamma} and threshold={stop_threshold}")
