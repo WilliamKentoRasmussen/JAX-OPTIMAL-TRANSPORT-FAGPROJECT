@@ -185,6 +185,33 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+def figure_3_dim_vs_gamma_metrics_table(summary_df):
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+    gammas = sorted(summary_df["gamma"].unique())
+
+    rows = []
+    for dim in latent_dims:
+        row = {}
+        for gamma in gammas:
+
+            mask = (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == gamma)
+            mmd = summary_df.loc[mask, "mmd_image"].mean()
+            wasserstein = summary_df.loc[mask, "wasserstein_distance"].mean()
+            conf = summary_df.loc[mask, "classifier_confidence_image"].mean()
+            row[gamma] = f"MMD: {mmd:.4f}, W-Dist: {wasserstein:.4f}, Conf: {conf:.4f}"
+        rows.append(row)
+
+    figure_3_df = pd.DataFrame(data=rows, index=latent_dims)
+    figure_3_df.index.name = "latent_dim"
+
+    print(figure_3_df.to_latex())
+    figure_3_df.to_csv("data/figure_3.csv")
+    return figure_3_df
+
+            
+
+
+
 
 def plot_gamma_vs_mmd(summary_df,
                       save_dir="figures/plots"):
@@ -407,10 +434,11 @@ def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatma
 if __name__ == "__main__":
 
 
-    "data/evaluation_summary.csv", index=False
+
     
     summary_df = pd.read_csv("data/evaluation_summary.csv")
-    plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
+    figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    #plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
     # training_data, test_data = getData()
     # loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
     # model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
