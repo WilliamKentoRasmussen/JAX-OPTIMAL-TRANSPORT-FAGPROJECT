@@ -18,15 +18,15 @@ from main_project.model import AEv2
 from main_project.utils import load, load_with_hyperparams
 from main_project.data import getData, getDataloader
 from main_project.environment import (
-    GAMMA, 
-    MODELS_DIM, 
-    INTERMEDIATE_FRACTIONS, 
-    MAX_POINTS, 
+    GAMMA,
+    MODELS_DIM,
+    INTERMEDIATE_FRACTIONS,
+    MAX_POINTS,
     MAX_ITERATION,
-    STOP_THRESSHOLD, 
-    LABELS, 
+    STOP_THRESSHOLD,
+    LABELS,
     SAVE_INTERMEDIATE,
-    VERBOSE_OPTIMAL_TRANSPORT
+    VERBOSE_OPTIMAL_TRANSPORT,
 )
 
 from main_project.sinkhorn import (
@@ -44,30 +44,26 @@ gamma = 1e-3
 
 
 def get_trajectory(source, target, P, decoder=None):
-
-    decode   = decoder if decoder is not None else lambda z: z
+    decode = decoder if decoder is not None else lambda z: z
     n_points = min(MAX_POINTS, len(source))
 
-    source_images          = []
-    target_images          = []
+    source_images = []
+    target_images = []
     expected_target_images = []
-    intermediate_images    = []
+    intermediate_images = []
     expected_target_latent = []
     original_target_latent = []
 
-
-    fractions = jnp.array(INTERMEDIATE_FRACTIONS)  
+    fractions = jnp.array(INTERMEDIATE_FRACTIONS)
 
     for i in range(n_points):
-        p_y_given_x     = get_probability_y_given_x(P, i)
-        x_star          = jnp.array(source[i].squeeze())
-        y_point         = jnp.array(target[i].squeeze())
+        p_y_given_x = get_probability_y_given_x(P, i)
+        x_star = jnp.array(source[i].squeeze())
+        y_point = jnp.array(target[i].squeeze())
         expected_target = jnp.array((p_y_given_x @ target).squeeze())
-
 
         expected_target_latent.append(expected_target)
         original_target_latent.append(y_point)
-
 
         source_images.append(np.array(decode(x_star)))
         target_images.append(np.array(decode(y_point)))
@@ -78,20 +74,20 @@ def get_trajectory(source, target, P, decoder=None):
             # Vectorized calculation of intermediate mixtures: shape (F, latent_dim)
             # (1 - f) * x_star + f * expected_target
             inter_latents = (1.0 - fractions[:, None]) * x_star + fractions[:, None] * expected_target
-            
+
             # Using vmap to decode all intermediate frames efficiently at once
             decoded_inter = jax.vmap(decode)(inter_latents)
             intermediate_images.append(np.array(decoded_inter))
 
     return {
         # Latent
-        "target":             np.array(original_target_latent),
-        "expected_target":        np.array(expected_target_latent),
+        "target": np.array(original_target_latent),
+        "expected_target": np.array(expected_target_latent),
         # Images
-        "source_images":        np.array(source_images),
-        "target_images":          np.array(target_images),
+        "source_images": np.array(source_images),
+        "target_images": np.array(target_images),
         "expected_target_images": np.array(expected_target_images),
-        "intermediate_images":    np.array(intermediate_images),
+        "intermediate_images": np.array(intermediate_images),
     }
 
 
@@ -104,19 +100,17 @@ def save_sinkhorn_transformation(model_name, gamma=1e-3, source_label=0, target_
     )
     t1 = time.perf_counter()
 
-
     trajectory = get_trajectory(
-        latent_source, latent_target,
+        latent_source,
+        latent_target,
         P=P,
         decoder=model.decoder,
     )
     t2 = time.perf_counter()
-    if (VERBOSE_OPTIMAL_TRANSPORT): print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
+    if VERBOSE_OPTIMAL_TRANSPORT:
+        print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
 
-    keys_to_save = [
-        "target", "expected_target", "source_images", 
-        "target_images", "expected_target_images"
-    ]
+    keys_to_save = ["target", "expected_target", "source_images", "target_images", "expected_target_images"]
     if SAVE_INTERMEDIATE:
         keys_to_save.append("intermediate_images")
 
@@ -156,38 +150,39 @@ def save_transformations():
     for dim in MODELS_DIM:
         model_name = f"ae_best_model_bo_{dim}"
         print(f"\n--- dim={dim} ---")
-        
+
         model_transport_data = {}
 
         for gamma_val in GAMMA:
             print(f"\n--- gamma={gamma_val} ---")
-            
+
             if gamma_val not in model_transport_data:
                 model_transport_data[gamma_val] = {}
 
-            for (source_label, target_label) in combinations(LABELS, 2):
-                if(VERBOSE_OPTIMAL_TRANSPORT): print(f"\n--- source = {source_label} and target = {target_label} ---") 
+            for source_label, target_label in combinations(LABELS, 2):
+                if VERBOSE_OPTIMAL_TRANSPORT:
+                    print(f"\n--- source = {source_label} and target = {target_label} ---")
                 start = time.perf_counter()
-                
+
                 iter_count, sinhorn_trajectory = save_sinkhorn_transformation(
                     model_name=model_name, gamma=gamma_val, source_label=source_label, target_label=target_label
                 )
 
                 elapsed = time.perf_counter() - start
                 data.append((dim, gamma_val, iter_count, elapsed, source_label, target_label))
-                
+
                 # Assignment using structured string keys without nested initialization collision
                 label_key = f"source_{source_label}_target_{target_label}"
                 model_transport_data[gamma_val][label_key] = sinhorn_trajectory
-                
 
         pickle_filename = f"data/{model_name}_ot_data.pkl"
         with open(pickle_filename, "wb") as f:
             pickle.dump(model_transport_data, f)
         print(f"Saved optimal transport data to {pickle_filename}")
 
-
-    df = pd.DataFrame(data, columns=["dim", "gamma", "sinkhorn_iterations", "sinkhorn_time", "source_label", "target_label"])
+    df = pd.DataFrame(
+        data, columns=["dim", "gamma", "sinkhorn_iterations", "sinkhorn_time", "source_label", "target_label"]
+    )
     df.to_csv("sinkhorn_iterations_and_times.csv", index=False)
 
 

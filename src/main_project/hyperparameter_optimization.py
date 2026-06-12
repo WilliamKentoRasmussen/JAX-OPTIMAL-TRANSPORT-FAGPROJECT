@@ -18,13 +18,13 @@ from main_project.environment import INTERMEDIATE_FRACTIONS
 from environment import MODELS_DIM
 from main_project.utils import save_with_hyperparams
 import os
-#https://medium.com/@vikakbary/the-first-step-to-optuna-understanding-766e50488c67
+# https://medium.com/@vikakbary/the-first-step-to-optuna-understanding-766e50488c67
 
 if os.path.exists("ae_bo.db"):
     os.remove("ae_bo.db")
 
-def objective(trial,latent_dim=2):
 
+def objective(trial, latent_dim=2):
     arch_name = trial.suggest_categorical(
         "arch", ["small2", "small", "medium", "large", "large2", "medium2", "large3", "large4"]
     )  # try different architectures
@@ -63,23 +63,21 @@ def objective(trial,latent_dim=2):
     val_subset = Subset(training_data, range(split, n))
     val_loader = getDataloader(val_subset)
 
-
-
     trial.set_user_attr("val_loss", float(val_loss))  # save the attributes for each trial
 
-    return val_loss 
+    return val_loss
 
 
 arch_presets = {
-        "small2": [64, 32, 16, 16, 8],
-        "small": [128, 64, 32, 16, 8],
-        "medium": [256, 128, 64, 32, 16],
-        "medium2": [256, 256, 128, 64, 32],
-        "large": [512, 256, 128, 64, 32],
-        "large2": [512, 512, 256, 128, 64],
-        "large3": [512, 512, 512, 256, 128],
-        "large4": [512, 512, 512, 512, 256],
-    }
+    "small2": [64, 32, 16, 16, 8],
+    "small": [128, 64, 32, 16, 8],
+    "medium": [256, 128, 64, 32, 16],
+    "medium2": [256, 256, 128, 64, 32],
+    "large": [512, 256, 128, 64, 32],
+    "large2": [512, 512, 256, 128, 64],
+    "large3": [512, 512, 512, 256, 128],
+    "large4": [512, 512, 512, 512, 256],
+}
 
 best_parameters = []
 # ── Run ───────────────────────────────────────────────────────────────────────
@@ -87,13 +85,14 @@ for latent_dim in MODELS_DIM:
     study = optuna.create_study(
         direction="minimize",
         sampler=optuna.samplers.TPESampler(seed=42),
-        pruner=optuna.pruners.MedianPruner(n_warmup_steps=5),  # stop early if val loss is below median of previous trials likely not optimum
+        pruner=optuna.pruners.MedianPruner(
+            n_warmup_steps=5
+        ),  # stop early if val loss is below median of previous trials likely not optimum
         study_name=f"ae_full_optimization_{latent_dim}",
         load_if_exists=True,
     )
 
     study.optimize(lambda trial: objective(trial, latent_dim=latent_dim), n_trials=20)
-
 
     best = study.best_trial
     print(f"\nBest trial for latent dimension {latent_dim}:")
@@ -102,11 +101,9 @@ for latent_dim in MODELS_DIM:
     print(f"\nBest hyperparameters:")
     for k, v in best.params.items():
         print(f"  {k:15s}: {v}")
-    
 
     print(f"\nValidation metrics:")
     print(f"  val_loss:           {best.user_attrs['val_loss']:.4f}")
-
 
     print(f"\nRetraining best configuration for latent dimension {latent_dim} on full training data...")
     best_params = best.params
@@ -122,10 +119,7 @@ for latent_dim in MODELS_DIM:
         lambda_l2=best_params["lambda_l2"],
     )
     final_model, _, final_test_loss = final_trainer.train(
-        epochs=500,
-        val_split=0.2,
-        model=best_model,
-        model_name=f"ae_best_model_bo_{latent_dim}"
+        epochs=500, val_split=0.2, model=best_model, model_name=f"ae_best_model_bo_{latent_dim}"
     )
     print(f"Final test loss: {final_test_loss:.4f}")
     save_with_hyperparams(

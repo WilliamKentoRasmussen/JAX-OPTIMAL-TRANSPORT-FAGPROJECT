@@ -14,8 +14,10 @@ Recration figure 3: Entropy-regularized transportaiton plans for different value
 from J. Solomon, Computational Optima Transport
 """
 
+
 def gaussian_1d(x, mean, std):
     return jnp.exp(-0.5 * ((x - mean) / std) ** 2)
+
 
 def plot_gamma_1d():
     x = jnp.linspace(0, 1, 120)
@@ -75,9 +77,9 @@ def plot_gamma_1d():
 
         ax_main.set_xlabel(rf"$\gamma = {gamma}$")
 
-
     plt.savefig("figures/gamma_visualization.png", dpi=150)
     plt.show()
+
 
 ###############################################
 ###############################################
@@ -88,15 +90,17 @@ from Gabreil Peyré and Marco Cuturi, Computational Optima Transport
 """
 
 
-def sample_circle(n, r_max =0.25): 
+def sample_circle(n, r_max=0.25):
     r = np.sqrt(np.random.uniform(0, r_max**2, n))
     theta = np.random.uniform(0, 2 * np.pi, n)
-    return np.stack([r * np.cos(theta), r * np.sin(theta)], axis = 1)
+    return np.stack([r * np.cos(theta), r * np.sin(theta)], axis=1)
+
 
 def sample_ring(n, r_min=0.3, r_max=0.5):
     r = np.sqrt(np.random.uniform(r_min**2, r_max**2, n))
     theta = np.random.uniform(0, 2 * np.pi, n)
     return np.stack([r * np.cos(theta), r * np.sin(theta)], axis=1)
+
 
 def plot_transport_plan(ax, s, d, P, threshold=0.05):
     """Draw line segments between point pairs where P[i,j] exceeds threshold * P.max()."""
@@ -106,15 +110,19 @@ def plot_transport_plan(ax, s, d, P, threshold=0.05):
             w = P[i, j] / p_max
             if w > threshold:
                 ax.plot(
-                    [s[i, 0], d[j, 0]], [s[i, 1], d[j, 1]],
-                    color="black", alpha=float(w) * 0.9, linewidth=0.8,
+                    [s[i, 0], d[j, 0]],
+                    [s[i, 1], d[j, 1]],
+                    color="black",
+                    alpha=float(w) * 0.9,
+                    linewidth=0.8,
                 )
+
 
 def plot_gamma_2d():
     np.random.seed(42)
     n = 30
-    s = sample_circle(n=n, r_max=0.2)   # red — inner disk (α)
-    d = sample_ring(n=n)                 # blue — outer ring (β)
+    s = sample_circle(n=n, r_max=0.2)  # red — inner disk (α)
+    d = sample_ring(n=n)  # blue — outer ring (β)
 
     a = jnp.ones(n) / n
     b = jnp.ones(n) / n
@@ -130,15 +138,17 @@ def plot_gamma_2d():
 
         plot_transport_plan(ax, s, d, P, threshold=0.05)
 
-        ax.scatter(*s.T, c="red",  s=25, zorder=5)
+        ax.scatter(*s.T, c="red", s=25, zorder=5)
         ax.scatter(*d.T, c="blue", s=25, zorder=5)
         ax.set_aspect("equal")
         ax.axis("off")
         ax.set_title(rf"$\gamma = {gamma}$", fontsize=13)
 
     # Label α and β on the first panel
-    axes[0].annotate(r"$\alpha$", xy=(0.8, 0.45), xycoords="axes fraction", color="red",  fontsize=20, fontweight="bold")
-    axes[0].annotate(r"$\beta$",  xy=(0.05, 0.85), xycoords="axes fraction", color="blue", fontsize=20, fontweight="bold")
+    axes[0].annotate(r"$\alpha$", xy=(0.8, 0.45), xycoords="axes fraction", color="red", fontsize=20, fontweight="bold")
+    axes[0].annotate(
+        r"$\beta$", xy=(0.05, 0.85), xycoords="axes fraction", color="blue", fontsize=20, fontweight="bold"
+    )
 
     plt.tight_layout()
     plt.savefig("figures/gamma_visualization_2d.png", dpi=150, bbox_inches="tight")
@@ -147,5 +157,3 @@ def plot_gamma_2d():
 
 if __name__ == "__main__":
     plot_gamma_2d()
-    
-

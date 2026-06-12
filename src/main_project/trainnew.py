@@ -18,6 +18,7 @@ from main_project.utils import save
 from tqdm import tqdm
 import re
 
+
 class AETrainer:
     def __init__(self, model, learning_rate, lambda_l2):
         self.model = model
@@ -25,10 +26,9 @@ class AETrainer:
         self.lambda_l2 = lambda_l2
         # self.loss_name = loss_name
 
-    
     # def loss_fn(self,model, x):
     #     recon, z = jax.vmap(model)(x)
-        
+
     #     if self.loss_name == "mse":
     #         # standard — penalizes large errors heavily
     #         recon_loss = jnp.mean((recon - x)**2)
@@ -36,7 +36,6 @@ class AETrainer:
     #     elif self.loss_name == "mae":
     #         # more robust to outliers — treats all errors equally
     #         recon_loss = jnp.mean(jnp.abs(recon - x))
-
 
     #     elif self.loss_name == "bce":
     #         # binary cross entropy — natural for pixel values in [0,1]
@@ -48,14 +47,11 @@ class AETrainer:
     #     latent_l2 = jnp.mean(jnp.sum(z**2, axis=-1))
     #     return recon_loss + self.lambda_l2 * latent_l2
     @eqx.filter_jit
-    def loss_fn(self,model, x):
+    def loss_fn(self, model, x):
         recon, z = jax.vmap(model)(x)
-        recon_loss = jnp.mean((recon - x)**2)
+        recon_loss = jnp.mean((recon - x) ** 2)
         latent_l2 = jnp.mean(jnp.sum(z**2, axis=-1))
         return recon_loss + self.lambda_l2 * latent_l2
-
-
-
 
     @eqx.filter_jit
     def train_step(self, model, opt_state, x):
@@ -141,10 +137,11 @@ class AETrainer:
         return model, history, test_loss
 
 
-class ClassifierTrainer():
+class ClassifierTrainer:
     def __init__(self, model, optimizer):
         self.model = model
         self.optimizer = optimizer
+
     @eqx.filter_jit
     def classifier_loss_fn(self, model, x, labels):
         # model outputs log_softmax, so we use nll loss
@@ -152,15 +149,14 @@ class ClassifierTrainer():
         loss = optax.losses.softmax_cross_entropy_with_integer_labels(log_probs, labels)
         return jnp.mean(loss)
 
-
     @eqx.filter_jit
     def classifier_train_steps(self, model, opt_state, x, labels):
         loss, grads = eqx.filter_value_and_grad(self.classifier_loss_fn)(model, x, labels)
         updates, opt_state = self.optimizer.update(grads, opt_state, params=eqx.filter(model, eqx.is_array))
         return eqx.apply_updates(model, updates), opt_state, loss
 
-
-    def train_classifier(self,
+    def train_classifier(
+        self,
         epochs=20,
         val_split=0.2,
         model=None,

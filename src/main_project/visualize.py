@@ -17,6 +17,7 @@ from main_project.model import targetClassifier
 from main_project.utils import load
 from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, LABELS
 import os
+
 labels_map = {i: str(i) for i in range(10)}
 
 
@@ -181,9 +182,11 @@ def plot_training_loss(data):
     plt.grid(True)
     plt.show()
 
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+
 
 def figure_3_dim_vs_gamma_metrics_table(summary_df):
     latent_dims = sorted(summary_df["latent_dim"].unique())
@@ -193,7 +196,6 @@ def figure_3_dim_vs_gamma_metrics_table(summary_df):
     for dim in latent_dims:
         row = {}
         for gamma in gammas:
-
             mask = (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == gamma)
             mmd = summary_df.loc[mask, "mmd_image"].mean()
             wasserstein = summary_df.loc[mask, "wasserstein_distance"].mean()
@@ -208,15 +210,8 @@ def figure_3_dim_vs_gamma_metrics_table(summary_df):
     figure_3_df.to_csv("data/figure_3.csv")
     return figure_3_df
 
-            
 
-
-
-
-def plot_gamma_vs_mmd(summary_df,
-                      save_dir="figures/plots"):
-
-
+def plot_gamma_vs_mmd(summary_df, save_dir="figures/plots"):
     os.makedirs(save_dir, exist_ok=True)
 
     latent_dims = sorted(summary_df["latent_dim"].unique())
@@ -225,17 +220,13 @@ def plot_gamma_vs_mmd(summary_df,
     fig, ax = plt.subplots(figsize=(8, 5))
 
     for dim in latent_dims:
-
         means = []
         lowers = []
         uppers = []
 
         for gamma in gammas:
-
             values = summary_df.loc[
-                (summary_df["latent_dim"] == dim)
-                & (summary_df["gamma"] == gamma),
-                "mmd_image"
+                (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == gamma), "mmd_image"
             ].values
 
             if len(values) == 0:
@@ -260,20 +251,9 @@ def plot_gamma_vs_mmd(summary_df,
         lowers = np.array(lowers)
         uppers = np.array(uppers)
 
-        ax.plot(
-            gammas,
-            means,
-            marker="o",
-            linewidth=2,
-            label=f"dim={dim}"
-        )
+        ax.plot(gammas, means, marker="o", linewidth=2, label=f"dim={dim}")
 
-        ax.fill_between(
-            gammas,
-            lowers,
-            uppers,
-            alpha=0.15
-        )
+        ax.fill_between(gammas, lowers, uppers, alpha=0.15)
 
     ax.set_xlabel(r"$\gamma$")
     ax.set_ylabel("Average MMD Image")
@@ -285,17 +265,12 @@ def plot_gamma_vs_mmd(summary_df,
     ax.legend(title="Latent Dim", bbox_to_anchor=(1.02, 1))
     plt.tight_layout()
 
-    plt.savefig(
-        f"{save_dir}/gamma_vs_mmd.png",
-        dpi=300,
-        bbox_inches="tight"
-    )
+    plt.savefig(f"{save_dir}/gamma_vs_mmd.png", dpi=300, bbox_inches="tight")
 
     plt.show()
 
-def plot_latent_dim_vs_average_mmd(summary_df,
-                                   save_dir="figures/plots"):
 
+def plot_latent_dim_vs_average_mmd(summary_df, save_dir="figures/plots"):
     os.makedirs(save_dir, exist_ok=True)
 
     latent_dims = sorted(summary_df["latent_dim"].unique())
@@ -305,11 +280,7 @@ def plot_latent_dim_vs_average_mmd(summary_df,
     upper = []
 
     for dim in latent_dims:
-
-        values = summary_df.loc[
-            summary_df["latent_dim"] == dim,
-            "mmd_image"
-        ].values
+        values = summary_df.loc[summary_df["latent_dim"] == dim, "mmd_image"].values
 
         mean = np.mean(values)
         std = np.std(values, ddof=1)
@@ -329,21 +300,9 @@ def plot_latent_dim_vs_average_mmd(summary_df,
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    ax.plot(
-        latent_dims,
-        means,
-        marker="o",
-        linewidth=2,
-        label="Mean MMD"
-    )
+    ax.plot(latent_dims, means, marker="o", linewidth=2, label="Mean MMD")
 
-    ax.fill_between(
-        latent_dims,
-        lower,
-        upper,
-        alpha=0.25,
-        label="95% CI"
-    )
+    ax.fill_between(latent_dims, lower, upper, alpha=0.25, label="95% CI")
 
     ax.set_xlabel("Latent Dimension")
     ax.set_ylabel("Average MMD Image")
@@ -354,38 +313,23 @@ def plot_latent_dim_vs_average_mmd(summary_df,
 
     plt.tight_layout()
 
-    plt.savefig(
-        f"{save_dir}/latent_dim_vs_average_mmd.png",
-        dpi=300,
-        bbox_inches="tight"
-    )
+    plt.savefig(f"{save_dir}/latent_dim_vs_average_mmd.png", dpi=300, bbox_inches="tight")
 
     plt.show()
 
-def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatmaps"):
 
+def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatmaps"):
     os.makedirs(save_dir, exist_ok=True)
 
     labels = LABELS
 
-    #Laver et heatmap for hvert dimension
+    # Laver et heatmap for hvert dimension
     for latent_dim in sorted(summary_df["latent_dim"].unique()):
+        model_df = summary_df[summary_df["latent_dim"] == latent_dim]
 
-        model_df = summary_df[
-            summary_df["latent_dim"] == latent_dim
-        ]
+        matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
 
-        matrix = pd.DataFrame(
-            np.nan,
-            index=labels,
-            columns=labels
-        )
-
-        grouped = (
-            model_df
-            .groupby(["source_label", "target_label"])["mmd_image"]
-            .mean()
-        )
+        grouped = model_df.groupby(["source_label", "target_label"])["mmd_image"].mean()
 
         for (src, tgt), value in grouped.items():
             matrix.loc[src, tgt] = value
@@ -402,9 +346,7 @@ def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatma
 
         ax.set_xlabel("Target Label")
         ax.set_ylabel("Source Label")
-        ax.set_title(
-            f"MMD Image Heatmap (avg γ)\nLatent Dim = {latent_dim}"
-        )
+        ax.set_title(f"MMD Image Heatmap (avg γ)\nLatent Dim = {latent_dim}")
 
         plt.colorbar(im, ax=ax, label="MMD Image")
 
@@ -413,32 +355,19 @@ def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatma
                 val = matrix.iloc[i, j]
 
                 if not np.isnan(val):
-                    ax.text(
-                        j,
-                        i,
-                        f"{val:.2f}",
-                        ha="center",
-                        va="center",
-                        fontsize=7
-                    )
+                    ax.text(j, i, f"{val:.2f}", ha="center", va="center", fontsize=7)
 
         plt.tight_layout()
 
-        if save: plt.savefig(
-            f"{save_dir}/mmd_image_heatmap_full_dim_{latent_dim}.png",
-            dpi=300
-        )
+        if save:
+            plt.savefig(f"{save_dir}/mmd_image_heatmap_full_dim_{latent_dim}.png", dpi=300)
         plt.close()
-    
-    
+
+
 if __name__ == "__main__":
-
-
-
-    
     summary_df = pd.read_csv("data/evaluation_summary.csv")
     figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
-    #plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
+    # plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
     # training_data, test_data = getData()
     # loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
     # model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
@@ -446,5 +375,3 @@ if __name__ == "__main__":
     # plot_reconstruction(training_data, model)
     # plot_latent_clusters(training_data, model)
     # pca_visualize_for_high_dimension(training_data, model)
- 
-

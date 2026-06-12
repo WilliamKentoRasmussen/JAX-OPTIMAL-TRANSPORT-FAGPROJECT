@@ -17,11 +17,19 @@ import time
 from main_project.model import AEv2
 from main_project.utils import load
 from main_project.data import getData, getDataloader
-from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION, TQDM_SINKHORN,VERBOSE_OPTIMAL_TRANSPORT, STOP_THRESSHOLD
+from main_project.environment import (
+    GAMMA,
+    MODELS_DIM,
+    INTERMEDIATE_FRACTIONS,
+    MAX_POINTS,
+    MAX_ITERATION,
+    TQDM_SINKHORN,
+    VERBOSE_OPTIMAL_TRANSPORT,
+    STOP_THRESSHOLD,
+)
 
 
 gamma = 1e-3
-
 
 
 @jax.jit
@@ -37,14 +45,14 @@ def cdist_euclidean_v0(x: jax.Array, y: jax.Array) -> jax.Array:
     """
     return jnp.sqrt(jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1))
 
+
 @jax.jit
-def cosine_similarity(x,y):
-    dot_product = jnp.dot(x,y)
+def cosine_similarity(x, y):
+    dot_product = jnp.dot(x, y)
     x_norm = jnp.linalg.norm(x)
     y_norm = jnp.linalg.norm(y)
-    similarity = dot_product/(x_norm*y_norm)
+    similarity = dot_product / (x_norm * y_norm)
     return similarity
-
 
 
 @jax.jit
@@ -107,14 +115,13 @@ def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000, stop_thresh=1e-7, verbose=F
     v = jnp.zeros_like(d)
 
     for iter in tqdm(range(max_iters), desc="Sinkhorn iteration", disable=TQDM_SINKHORN):
-        u_prev = u   # ← save before update
-        v_prev = v   # ← save before update
+        u_prev = u  # ← save before update
+        v_prev = v  # ← save before update
 
         u = gamma * (log_s - jax.nn.logsumexp((v[None, :] - C) / gamma, axis=1))
         v = gamma * (log_d - jax.nn.logsumexp((u[:, None] - C) / gamma, axis=0))
 
-        if (jnp.max(jnp.abs(u_prev - u)) < stop_thresh and
-            jnp.max(jnp.abs(v_prev - v)) < stop_thresh):
+        if jnp.max(jnp.abs(u_prev - u)) < stop_thresh and jnp.max(jnp.abs(v_prev - v)) < stop_thresh:
             if verbose:
                 print(f"Converged at iteration {iter}")
             break
@@ -148,7 +155,7 @@ def load_source_and_target_arrays(source_label=0, target_label=1):
     return source_arr, target_arr
 
 
-def run_sinkhorn_by_model(model, gamma,distance_metric="euclidean", source_label=0, target_label=1):
+def run_sinkhorn_by_model(model, gamma, distance_metric="euclidean", source_label=0, target_label=1):
     source_arr, target_arr = load_source_and_target_arrays(source_label, target_label)
 
     def recon(x):
@@ -194,7 +201,7 @@ def main():
         model_name = f"ae_best_model_{dim}"
         for gamma in GAMMA:
             model = load(model_name)
-            latent_source, latent_target, P, u, v, iter = run_sinkhorn_by_model(model=model,gamma=gamma)
+            latent_source, latent_target, P, u, v, iter = run_sinkhorn_by_model(model=model, gamma=gamma)
             data.append((model_name, gamma, iter))
         start = time.perf_counter()
         print("Saving sinkhorn transformation for", model_name)

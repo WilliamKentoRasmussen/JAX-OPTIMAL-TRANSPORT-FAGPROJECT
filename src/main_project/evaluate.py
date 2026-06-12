@@ -59,7 +59,6 @@ key, subkey = jax.random.split(key, 2)
 #     return fid
 
 
-
 @jax.jit
 def median_bandwidth(x, y):
     z = jnp.concatenate([x, y], axis=0)
@@ -74,8 +73,9 @@ def median_bandwidth(x, y):
 # https://www.onurtunali.com/ml/2019/03/08/maximum-mean-discrepancy-in-machine-learning.html
 from functools import partial
 
+
 @partial(jax.jit, static_argnames=("kernel", "is_latent"))
-def MMD(x: Array, y: Array, kernel,is_latent=False):
+def MMD(x: Array, y: Array, kernel, is_latent=False):
     xx, yy, zz = jnp.matmul(x, x.T), jnp.matmul(y, y.T), jnp.matmul(x, y.T)
 
     rx = jnp.diag(xx)[jnp.newaxis, :]  # (1, N)
@@ -92,8 +92,8 @@ def MMD(x: Array, y: Array, kernel,is_latent=False):
         if is_latent:
             bandwidth_range = [10, 15, 20, 50]
         else:
-            med = median_bandwidth(x,y) #Skriv hvorfor i teori
-            bandwidth_range = [0.5*med, med, 2*med, 4*med]
+            med = median_bandwidth(x, y)  # Skriv hvorfor i teori
+            bandwidth_range = [0.5 * med, med, 2 * med, 4 * med]
 
             #
         for a in bandwidth_range:
@@ -106,17 +106,18 @@ def MMD(x: Array, y: Array, kernel,is_latent=False):
 
 
 classifier = load(name="evaluate_classifier", path="models", model=targetClassifier(subkey))
+
+
 @jax.jit
 def classifier_confidence(transported_images, target_class=1):
-    
     x = jnp.asarray(transported_images)
 
     log_probs = jax.vmap(classifier)(x)
     probs = jnp.exp(log_probs)  # Shape: [n, 10]
 
     p_target = probs[:, target_class]
-    #predictions = jnp.argmax(probs, axis=-1)
-    #classified = jnp.mean(predictions == target_class)
+    # predictions = jnp.argmax(probs, axis=-1)
+    # classified = jnp.mean(predictions == target_class)
 
     return jnp.mean(p_target)
 
@@ -134,48 +135,46 @@ def evaluate_by_model_in_image_space(sinkhorn_data, target_label, save_dir):
     target_img = jnp.asarray(sinkhorn_data["target_images"])
     expected_target_img = jnp.asarray(sinkhorn_data["expected_target_images"])
 
-
-    if ("intermediate_images" in sinkhorn_data): 
+    if "intermediate_images" in sinkhorn_data:
         intermediate_images = sinkhorn_data["intermediate_images"]
 
         # (n_points, n_fracs, 784) -> transpose to (n_fracs, n_points, 784)
-        intermediate_images = intermediate_images.transpose(1, 0, 2)  
+        intermediate_images = intermediate_images.transpose(1, 0, 2)
 
         data = []
         for frac, imgs in zip(INTERMEDIATE_FRACTIONS, intermediate_images):
-            
             mmd = MMD(jnp.asarray(imgs), jnp.asarray(target_img), kernel="rbf")
             classifier_conf = classifier_confidence(imgs, target_label)
-            #fid = calculate_fid(np.asarray(imgs), np.asarray(target_img))
-            data.append([frac, float(mmd), float(jnp.mean(classifier_conf))]) #fid
-
+            # fid = calculate_fid(np.asarray(imgs), np.asarray(target_img))
+            data.append([frac, float(mmd), float(jnp.mean(classifier_conf))])  # fid
 
         df = pd.DataFrame(data, columns=columns)
-    
+
         os.makedirs(save_dir, exist_ok=True)
         df.to_csv(f"{save_dir}/evaluation.csv", index=False)
-        
 
-    
     mmd = MMD(jnp.asarray(expected_target_img), jnp.asarray(target_img), kernel="rbf")
-    
-    classifier_conf = classifier_confidence(expected_target_img, target_label)
-    #fid = calculate_fid(np.asarray(expected_target_img), np.asarray(target_img))
 
-    
-    #wasserstein_distance = 0
+    classifier_conf = classifier_confidence(expected_target_img, target_label)
+    # fid = calculate_fid(np.asarray(expected_target_img), np.asarray(target_img))
+
+    # wasserstein_distance = 0
     wasserstein_distance = wasserstein_distance_subsampled(np.asarray(expected_target_img), np.asarray(target_img))
-   
-    return mmd,classifier_conf,wasserstein_distance, #fid
+
+    return (
+        mmd,
+        classifier_conf,
+        wasserstein_distance,
+    )  # fid
 
 
 def evaluate_by_model_in_latent_space(sinkhorn_data):
-    target = sinkhorn_data["target"] #changed to target now y_original
+    target = sinkhorn_data["target"]  # changed to target now y_original
     expected_target = sinkhorn_data["expected_target"]
-    
-    mmd = MMD(jnp.asarray(target), jnp.asarray(expected_target), kernel="rbf", is_latent = True)
+
+    mmd = MMD(jnp.asarray(target), jnp.asarray(expected_target), kernel="rbf", is_latent=True)
     wasserstein_distance = wasserstein_distance_subsampled(np.asarray(expected_target), np.asarray(target))
-    #wasserstein_distance= 0
+    # wasserstein_distance= 0
     return mmd, wasserstein_distance
 
 
@@ -189,6 +188,8 @@ def wasserstein_distance_subsampled(source_imgs, target_imgs, max_points=200, se
     idx2 = rng.choice(target_imgs.shape[0], n, replace=False)
 
     return wasserstein_distance_nd(source_imgs[idx1], target_imgs[idx2])
+
+
 # def wasserstein_distance_subsampled(source_imgs, target_imgs):
 
 #     distances = []
@@ -198,7 +199,6 @@ def wasserstein_distance_subsampled(source_imgs, target_imgs, max_points=200, se
 
 #     return np.mean(distances)
 
-                                                       
 
 def run_evaluation():
     summary = []
@@ -211,8 +211,6 @@ def run_evaluation():
             print(f"Skipping {model_name} because {pickle_filename} does not exist.")
             continue
 
-       
-
         with open(pickle_filename, "rb") as f:
             model_transport_data = pickle.load(f)
 
@@ -220,43 +218,42 @@ def run_evaluation():
             if gamma_val not in model_transport_data:
                 continue
 
-            for (source_label, target_label) in tqdm(combinations(LABELS, 2), f"evaluating numbers for gamma {gamma_val} and model {model_name}"):
+            for source_label, target_label in tqdm(
+                combinations(LABELS, 2), f"evaluating numbers for gamma {gamma_val} and model {model_name}"
+            ):
                 label_key = f"source_{source_label}_target_{target_label}"
-                
+
                 if label_key not in model_transport_data[gamma_val]:
                     continue
 
-        
                 sinkhorn_data = model_transport_data[gamma_val][label_key]
 
                 # Latent space MMD evaluation
                 mmd_latent, wasserstein_distance_latent = evaluate_by_model_in_latent_space(sinkhorn_data)
-                
 
                 # Directory to mirror evaluation artifacts locally
                 save_dir = f"data/{model_name}/{gamma_val}/{label_key}"
-                
-                # Image space metrics assessment
-                mmd_img,classifier_conf_img,wasserstein_distance_img = evaluate_by_model_in_image_space(
-                    sinkhorn_data=sinkhorn_data, 
-                    target_label=target_label, 
-                    save_dir=save_dir
-                )
-                #fid_img = 
 
-                
-                summary.append({
-                    "latent_dim": dim,
-                    "gamma": gamma_val,
-                    "source_label": source_label,
-                    "target_label": target_label,
-                    "mmd_latent": float(mmd_latent),
-                    "wasserstein_distance_latent": float(wasserstein_distance_latent),
-                    "mmd_image": mmd_img,
-                    "classifier_confidence_image": classifier_conf_img,
-                    #"fid_image": fid_img,
-                    "wasserstein_distance": wasserstein_distance_img,
-                })
+                # Image space metrics assessment
+                mmd_img, classifier_conf_img, wasserstein_distance_img = evaluate_by_model_in_image_space(
+                    sinkhorn_data=sinkhorn_data, target_label=target_label, save_dir=save_dir
+                )
+                # fid_img =
+
+                summary.append(
+                    {
+                        "latent_dim": dim,
+                        "gamma": gamma_val,
+                        "source_label": source_label,
+                        "target_label": target_label,
+                        "mmd_latent": float(mmd_latent),
+                        "wasserstein_distance_latent": float(wasserstein_distance_latent),
+                        "mmd_image": mmd_img,
+                        "classifier_confidence_image": classifier_conf_img,
+                        # "fid_image": fid_img,
+                        "wasserstein_distance": wasserstein_distance_img,
+                    }
+                )
 
     if summary:
         summary_df = pd.DataFrame(summary)
@@ -264,7 +261,6 @@ def run_evaluation():
         plot_gamma_vs_mmd(summary_df)
         plot_latent_dim_vs_average_mmd(summary_df)
         plot_mmd_image_heatmaps_full(summary_df)
-        
 
         os.makedirs("data", exist_ok=True)
         summary_df.to_csv("data/evaluation_summary.csv", index=False)
