@@ -15,8 +15,8 @@ from main_project.data import getData  # fixed
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
 from main_project.utils import load
-from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS
-
+from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, LABELS
+import os
 labels_map = {i: str(i) for i in range(10)}
 
 
@@ -181,422 +181,229 @@ def plot_training_loss(data):
     plt.grid(True)
     plt.show()
 
-
-# if __name__ == "__main__":
-#     training_data, test_data = getData()
-#     loss_data = pd.read_csv("data/training_history.csv")
-#     model = load(name="ae_best_model_lat2", path="models")
-#     plot_training_loss(loss_data)
-#     plot_reconstruction(training_data, model)
-#     plot_latent_clusters(training_data, model)
-#     pca_visualize_for_high_dimension(training_data, model)
+import os
+import numpy as np
+import matplotlib.pyplot as plt
 
 
+def plot_gamma_vs_mmd(summary_df,
+                      save_dir="figures/plots"):
 
-def _load_eval_csv(model_name, sb=False):
-    """Load evaluation CSV for a given model, Sinkhorn or SB variant."""
-    if sb:
-        return pd.read_csv(f"data/sb_{model_name}/evaluation.csv")
-    return pd.read_csv(f"data/{model_name}/evalution.csv")
- 
- 
-def _minmax_normalize(series):
-    lo, hi = series.min(), series.max()
-    if hi == lo:
-        return series * 0.0
-    return (series - lo) / (hi - lo)
- 
- 
-# ── 1. Metrics vs. transport fraction, one line per latent dim ────────────────
- 
-def plot_metrics_vs_fraction_by_dim(dims=MODELS_DIM):
-    """
-    Three stacked subplots (MMD, FID, Classifier Confidence) with one line per
-    latent dimension.  Covers both Sinkhorn and Schrödinger Bridge as separate
-    figures so the trajectories are easy to compare.
-    """
-    metrics_sinkhorn = [("MDD", "MMD"), ("FID", "FID"), ("Confidence of Classifier", "Classifier Confidence")]
-    metrics_sb       = [("MMD", "MMD"), ("FID", "FID"), ("Confidence of Classifier", "Classifier Confidence")]
- 
-    for method, metric_cols, loader_flag in [
-        ("Sinkhorn",           metrics_sinkhorn, False),
-        ("Schrödinger Bridge", metrics_sb,       True),
-    ]:
-        fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
-        fig.suptitle(f"Metrics vs. Transport Fraction — {method}", fontsize=14, y=1.01)
- 
-        for dim in dims:
-            model_name = f"ae_model_dim_{dim}"
-            try:
-                df = _load_eval_csv(model_name, sb=loader_flag)
-            except FileNotFoundError:
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+    gammas = sorted(summary_df["gamma"].unique())
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    for dim in latent_dims:
+
+        means = []
+        lowers = []
+        uppers = []
+
+        for gamma in gammas:
+
+            values = summary_df.loc[
+                (summary_df["latent_dim"] == dim)
+                & (summary_df["gamma"] == gamma),
+                "mmd_image"
+            ].values
+
+            if len(values) == 0:
+                means.append(np.nan)
+                lowers.append(np.nan)
+                uppers.append(np.nan)
                 continue
- 
-            x_col = df.columns[1]  # fraction or t column
-            for ax, (col, label) in zip(axes, metric_cols):
-                if col not in df.columns:
-                    # Sinkhorn CSV has a typo: "MDD" instead of "MMD"
-                    col = "MDD" if col == "MMD" and "MDD" in df.columns else col
-                ax.plot(df[x_col], df[col], marker="o", markersize=3, label=f"dim={dim}")
-                ax.set_ylabel(label)
-                ax.grid(True, alpha=0.3)
-                ax.legend(fontsize=8, loc="upper right")
- 
-        axes[-1].set_xlabel("Transport fraction / time step")
+
+            mean = np.mean(values)
+
+            if len(values) > 1:
+                std = np.std(values, ddof=1)
+                ci = 1.96 * std / np.sqrt(len(values))
+            else:
+                ci = 0
+
+            means.append(mean)
+            lowers.append(mean - ci)
+            uppers.append(mean + ci)
+
+        means = np.array(means)
+        lowers = np.array(lowers)
+        uppers = np.array(uppers)
+
+        ax.plot(
+            gammas,
+            means,
+            marker="o",
+            linewidth=2,
+            label=f"dim={dim}"
+        )
+
+        ax.fill_between(
+            gammas,
+            lowers,
+            uppers,
+            alpha=0.15
+        )
+
+    ax.set_xlabel(r"$\gamma$")
+    ax.set_ylabel("Average MMD Image")
+    ax.set_title("Average MMD vs Gamma")
+
+    ax.set_xscale("log")  # useful if gamma=[0.01,0.1,1,10]
+
+    ax.grid(True, alpha=0.3)
+    ax.legend(title="Latent Dim", bbox_to_anchor=(1.02, 1))
+    plt.tight_layout()
+
+    plt.savefig(
+        f"{save_dir}/gamma_vs_mmd.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
+    plt.show()
+
+def plot_latent_dim_vs_average_mmd(summary_df,
+                                   save_dir="figures/plots"):
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+
+    means = []
+    lower = []
+    upper = []
+
+    for dim in latent_dims:
+
+        values = summary_df.loc[
+            summary_df["latent_dim"] == dim,
+            "mmd_image"
+        ].values
+
+        mean = np.mean(values)
+        std = np.std(values, ddof=1)
+
+        n = len(values)
+
+        # 95% confidence interval
+        ci = 1.96 * std / np.sqrt(n)
+
+        means.append(mean)
+        lower.append(mean - ci)
+        upper.append(mean + ci)
+
+    means = np.array(means)
+    lower = np.array(lower)
+    upper = np.array(upper)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    ax.plot(
+        latent_dims,
+        means,
+        marker="o",
+        linewidth=2,
+        label="Mean MMD"
+    )
+
+    ax.fill_between(
+        latent_dims,
+        lower,
+        upper,
+        alpha=0.25,
+        label="95% CI"
+    )
+
+    ax.set_xlabel("Latent Dimension")
+    ax.set_ylabel("Average MMD Image")
+    ax.set_title("Average MMD vs Latent Dimension")
+
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+
+    plt.tight_layout()
+
+    plt.savefig(
+        f"{save_dir}/latent_dim_vs_average_mmd.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
+    plt.show()
+
+def plot_mmd_image_heatmaps_full(summary_df, save_dir="figures/heatmaps"):
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    labels = LABELS
+
+    #Laver et heatmap for hvert dimension
+    for latent_dim in sorted(summary_df["latent_dim"].unique()):
+
+        model_df = summary_df[
+            summary_df["latent_dim"] == latent_dim
+        ]
+
+        matrix = pd.DataFrame(
+            np.nan,
+            index=labels,
+            columns=labels
+        )
+
+        grouped = (
+            model_df
+            .groupby(["source_label", "target_label"])["mmd_image"]
+            .mean()
+        )
+
+        for (src, tgt), value in grouped.items():
+            matrix.loc[src, tgt] = value
+
+        fig, ax = plt.subplots(figsize=(8, 8))
+
+        im = ax.imshow(matrix)
+
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels)
+
+        ax.set_yticks(range(len(labels)))
+        ax.set_yticklabels(labels)
+
+        ax.set_xlabel("Target Label")
+        ax.set_ylabel("Source Label")
+        ax.set_title(
+            f"MMD Image Heatmap (avg γ)\nLatent Dim = {latent_dim}"
+        )
+
+        plt.colorbar(im, ax=ax, label="MMD Image")
+
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                val = matrix.iloc[i, j]
+
+                if not np.isnan(val):
+                    ax.text(
+                        j,
+                        i,
+                        f"{val:.2f}",
+                        ha="center",
+                        va="center",
+                        fontsize=7
+                    )
+
         plt.tight_layout()
-        plt.savefig(f"data/plots/metrics_vs_fraction_{method.replace(' ', '_').lower()}.png",
-                    dpi=150, bbox_inches="tight")
-        plt.show()
- 
- 
-# ── 2. Normalised overlay of all three metrics on one plot ────────────────────
- 
-def plot_normalized_metrics_overlay(dims=MODELS_DIM):
-    """
-    For each (method, dim) combination: MMD, FID, and confidence normalised to
-    [0, 1] and drawn on a single axes so agreement / divergence is visible.
-    """
-    for method, loader_flag in [("Sinkhorn", False), ("Schrödinger Bridge", True)]:
-        n_cols = min(3, len(dims))
-        n_rows = int(np.ceil(len(dims) / n_cols))
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows), squeeze=False)
-        fig.suptitle(f"Normalised Metrics Overlay — {method}", fontsize=13)
- 
-        for idx, dim in enumerate(dims):
-            ax = axes[idx // n_cols][idx % n_cols]
-            model_name = f"ae_model_dim_{dim}"
-            try:
-                df = _load_eval_csv(model_name, sb=loader_flag)
-            except FileNotFoundError:
-                ax.set_visible(False)
-                continue
- 
-            x_col = df.columns[1]
-            mmd_col  = "MDD" if "MDD" in df.columns else "MMD"
-            fid_col  = "FID"
-            conf_col = "Confidence of Classifier"
- 
-            for col, color, label in [
-                (mmd_col,  "steelblue", "MMD"),
-                (fid_col,  "tomato",    "FID"),
-                (conf_col, "seagreen",  "Confidence"),
-            ]:
-                if col not in df.columns:
-                    continue
-                ax.plot(df[x_col], _minmax_normalize(df[col]), color=color, label=label,
-                        marker=".", markersize=3)
- 
-            ax.set_title(f"dim = {dim}")
-            ax.set_xlabel("Fraction / t")
-            ax.set_ylabel("Normalised value")
-            ax.legend(fontsize=7)
-            ax.grid(True, alpha=0.3)
- 
-        # hide unused subplots
-        for idx in range(len(dims), n_rows * n_cols):
-            axes[idx // n_cols][idx % n_cols].set_visible(False)
- 
-        plt.tight_layout()
-        plt.savefig(f"data/plots/normalised_overlay_{method.replace(' ', '_').lower()}.png",
-                    dpi=150, bbox_inches="tight")
-        plt.show()
- 
- 
-# ── 3. Final-step paired bar chart: Sinkhorn vs. SB ──────────────────────────
- 
-def plot_final_step_bar_comparison(dims=MODELS_DIM):
-    """
-    At t=1.0 (last row of the CSV), compare Sinkhorn vs. Schrödinger Bridge for
-    each metric across latent dimensions.
-    """
-    metric_pairs = [
-        ("MDD",  "MMD",  "MMD at t=1"),
-        ("FID",  "FID",  "FID at t=1"),
-        ("Confidence of Classifier", "Confidence of Classifier", "Confidence at t=1"),
-    ]
- 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    fig.suptitle("Final Transport Quality: Sinkhorn vs. Schrödinger Bridge", fontsize=13)
- 
-    x = np.arange(len(dims))
-    width = 0.35
- 
-    for ax, (sink_col, sb_col, title) in zip(axes, metric_pairs):
-        sink_vals, sb_vals = [], []
-        for dim in dims:
-            model_name = f"ae_model_dim_{dim}"
-            try:
-                df_s = _load_eval_csv(model_name, sb=False)
-                sink_val = df_s[sink_col].iloc[-1] if sink_col in df_s.columns else np.nan
-            except FileNotFoundError:
-                sink_val = np.nan
-            try:
-                df_b = _load_eval_csv(model_name, sb=True)
-                sb_val = df_b[sb_col].iloc[-1] if sb_col in df_b.columns else np.nan
-            except FileNotFoundError:
-                sb_val = np.nan
-            sink_vals.append(sink_val)
-            sb_vals.append(sb_val)
- 
-        bars1 = ax.bar(x - width / 2, sink_vals, width, label="Sinkhorn",           color="steelblue", alpha=0.85)
-        bars2 = ax.bar(x + width / 2, sb_vals,   width, label="Schrödinger Bridge", color="tomato",    alpha=0.85)
-        ax.set_xticks(x)
-        ax.set_xticklabels([f"dim={d}" for d in dims], rotation=30)
-        ax.set_title(title)
-        ax.legend(fontsize=8)
-        ax.grid(axis="y", alpha=0.3)
- 
-    plt.tight_layout()
-    plt.savefig("data/plots/final_step_bar_comparison.png", dpi=150, bbox_inches="tight")
-    plt.show()
- 
- 
-# ── 4. Shaded gap — full trajectory difference ────────────────────────────────
- 
-def plot_shaded_trajectory_gap(dims=MODELS_DIM):
-    """
-    For each metric, draw both method trajectories and shade the gap between
-    them so the divergence over time is immediately visible.
-    """
-    metric_triples = [
-        ("MDD",  "MMD",  "MMD"),
-        ("FID",  "FID",  "FID"),
-        ("Confidence of Classifier", "Confidence of Classifier", "Classifier Confidence"),
-    ]
- 
-    for dim in dims:
-        model_name = f"ae_model_dim_{dim}"
-        try:
-            df_s = _load_eval_csv(model_name, sb=False)
-            df_b = _load_eval_csv(model_name, sb=True)
-        except FileNotFoundError:
-            continue
- 
-        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-        fig.suptitle(f"Sinkhorn vs. Schrödinger Bridge trajectory gap — dim={dim}", fontsize=12)
- 
-        # Align on a common grid via interpolation
-        t_common = np.linspace(0, 1, 100)
-        x_s = df_s.iloc[:, 1].values
-        x_b = df_b.iloc[:, 1].values
- 
-        for ax, (sink_col, sb_col, label) in zip(axes, metric_triples):
-            if sink_col not in df_s.columns or sb_col not in df_b.columns:
-                ax.set_visible(False)
-                continue
- 
-            y_s = np.interp(t_common, x_s / x_s.max(), df_s[sink_col].values)
-            y_b = np.interp(t_common, x_b / x_b.max(), df_b[sb_col].values)
- 
-            ax.plot(t_common, y_s, color="steelblue", label="Sinkhorn")
-            ax.plot(t_common, y_b, color="tomato",    label="Schrödinger Bridge")
-            ax.fill_between(t_common, y_s, y_b, alpha=0.18, color="purple", label="Gap")
-            ax.set_title(label)
-            ax.set_xlabel("Normalised transport fraction")
-            ax.legend(fontsize=8)
-            ax.grid(True, alpha=0.3)
- 
-        plt.tight_layout()
-        plt.savefig(f"data/plots/shaded_gap_dim_{dim}.png", dpi=150, bbox_inches="tight")
-        plt.show()
- 
- 
-# ── 5. Transport image grids at multiple checkpoints ─────────────────────────
- 
-def plot_transport_checkpoints(model_name, n_images=5, checkpoint_fracs=(0.0, 0.25, 0.5, 0.75, 1.0)):
-    """
-    Grid of source images → intermediate steps → target images sampled at
-    specific transport fractions.  Each row is one fraction level.
-    """
-    intermediate_images = np.load(f"data/{model_name}/intermediate_images.npy")
-    source_img          = np.load(f"data/{model_name}/original_images.npy")
-    target_img          = np.load(f"data/{model_name}/target_images.npy")
- 
-    # intermediate_images: shape (n_samples, n_steps, 784) → (n_steps, n_samples, 784)
-    intermediate_images = intermediate_images.transpose(1, 0, 2)
-    n_steps = intermediate_images.shape[0]
- 
-    frac_indices = [int(f * (n_steps - 1)) for f in checkpoint_fracs]
-    n_rows = len(frac_indices) + 2  # source row + fraction rows + target row
- 
-    fig, axes = plt.subplots(n_rows, n_images, figsize=(2 * n_images, 2 * n_rows))
- 
-    def _show_row(row_idx, images, row_label):
-        for col in range(n_images):
-            axes[row_idx, col].imshow(images[col].reshape(28, 28), cmap="gray")
-            axes[row_idx, col].axis("off")
-        axes[row_idx, 0].set_ylabel(row_label, fontsize=9)
- 
-    _show_row(0, source_img, "Source (t=0)")
-    for row_idx, step in enumerate(frac_indices, start=1):
-        frac = checkpoint_fracs[row_idx - 1]
-        _show_row(row_idx, intermediate_images[step], f"t={frac:.2f}")
-    _show_row(n_rows - 1, target_img, "Target (t=1)")
- 
-    plt.suptitle(f"Transport checkpoints — {model_name}", fontsize=12)
-    plt.tight_layout()
-    plt.savefig(f"data/plots/transport_checkpoints_{model_name}.png", dpi=150, bbox_inches="tight")
-    plt.show()
- 
- 
-# ── 6. Side-by-side Sinkhorn vs. SB transport paths ──────────────────────────
- 
-def plot_sinkhorn_vs_sb_side_by_side(model_name, n_images=5):
-    """
-    Two rows of image grids, one for Sinkhorn and one for Schrödinger Bridge,
-    both showing the same source images transported at evenly spaced steps.
-    """
-    intermediate_sink = np.load(f"data/{model_name}/intermediate_images.npy").transpose(1, 0, 2)
-    decoded_sb        = np.load(f"data/sb_{model_name}/decoded.npy").transpose(1, 0, 2)
-    source_img        = np.load(f"data/{model_name}/original_images.npy")
- 
-    n_steps_sink = intermediate_sink.shape[0]
-    n_steps_sb   = decoded_sb.shape[0]
- 
-    # Sample 5 evenly spaced steps from each
-    sink_steps = [intermediate_sink[i] for i in np.linspace(0, n_steps_sink - 1, 5, dtype=int)]
-    sb_steps   = [decoded_sb[i]        for i in np.linspace(0, n_steps_sb   - 1, 5, dtype=int)]
- 
-    fig, axes = plt.subplots(2, n_images, figsize=(2 * n_images, 5))
- 
-    for col, step_imgs in enumerate(sink_steps):
-        axes[0, col].imshow(step_imgs[0].reshape(28, 28), cmap="gray")
-        axes[0, col].axis("off")
-        t_label = f"t={col / (n_images - 1):.2f}"
-        axes[0, col].set_title(t_label, fontsize=8)
- 
-    for col, step_imgs in enumerate(sb_steps):
-        axes[1, col].imshow(step_imgs[0].reshape(28, 28), cmap="gray")
-        axes[1, col].axis("off")
- 
-    axes[0, 0].set_ylabel("Sinkhorn", fontsize=10)
-    axes[1, 0].set_ylabel("Schrödinger Bridge", fontsize=10)
- 
-    plt.suptitle(f"Transport path comparison — {model_name}", fontsize=12)
-    plt.tight_layout()
-    plt.savefig(f"data/plots/sinkhorn_vs_sb_{model_name}.png", dpi=150, bbox_inches="tight")
-    plt.show()
- 
- 
-# ── 7. FID vs. MMD scatter across all (model, fraction) points ───────────────
- 
-def plot_fid_vs_mmd_scatter(dims=MODELS_DIM):
-    """
-    Scatter of FID vs. MMD for every (model, fraction) data point.  Points are
-    coloured by latent dimension so clusters and outliers are easy to spot.
-    If the two metrics agree, points should lie roughly on a line.
-    """
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    cmap = plt.get_cmap("tab10")
- 
-    for ax, (method, loader_flag, mmd_col) in zip(axes, [
-        ("Sinkhorn",           False, "MDD"),
-        ("Schrödinger Bridge", True,  "MMD"),
-    ]):
-        for i, dim in enumerate(dims):
-            model_name = f"ae_model_dim_{dim}"
-            try:
-                df = _load_eval_csv(model_name, sb=loader_flag)
-            except FileNotFoundError:
-                continue
-            if mmd_col not in df.columns or "FID" not in df.columns:
-                continue
-            ax.scatter(df[mmd_col], df["FID"], color=cmap(i % 10),
-                       label=f"dim={dim}", alpha=0.75, s=25)
- 
-        ax.set_xlabel("MMD")
-        ax.set_ylabel("FID")
-        ax.set_title(f"FID vs. MMD — {method}")
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
- 
-    plt.tight_layout()
-    plt.savefig("data/plots/fid_vs_mmd_scatter.png", dpi=150, bbox_inches="tight")
-    plt.show()
- 
- 
-# ── 8. Final-step metrics vs. latent dimension (scaling ablation) ─────────────
- 
-def plot_metrics_vs_latent_dim(dims=MODELS_DIM):
-    """
-    Line plots of final-step FID, MMD, and confidence vs. latent dimension
-    size — answers whether a larger latent space produces better transport.
-    """
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    fig.suptitle("Transport Quality vs. Latent Dimension Size (at t=1)", fontsize=13)
- 
-    metric_triples = [
-        ("MDD",  "MMD",  "MMD",                "steelblue"),
-        ("FID",  "FID",  "FID",                "tomato"),
-        ("Confidence of Classifier", "Confidence of Classifier", "Classifier Confidence", "seagreen"),
-    ]
- 
-    for ax, (sink_col, sb_col, label, color) in zip(axes, metric_triples):
-        sink_vals, sb_vals = [], []
-        for dim in dims:
-            model_name = f"ae_model_dim_{dim}"
-            try:
-                df_s = _load_eval_csv(model_name, sb=False)
-                sink_vals.append(df_s[sink_col].iloc[-1] if sink_col in df_s.columns else np.nan)
-            except FileNotFoundError:
-                sink_vals.append(np.nan)
-            try:
-                df_b = _load_eval_csv(model_name, sb=True)
-                sb_vals.append(df_b[sb_col].iloc[-1] if sb_col in df_b.columns else np.nan)
-            except FileNotFoundError:
-                sb_vals.append(np.nan)
- 
-        ax.plot(dims, sink_vals, marker="o", color=color,        linestyle="-",  label="Sinkhorn")
-        ax.plot(dims, sb_vals,   marker="s", color=color,        linestyle="--", label="Schrödinger Bridge", alpha=0.7)
-        ax.set_xlabel("Latent dimension")
-        ax.set_ylabel(label)
-        ax.set_title(label)
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
-        ax.set_xticks(dims)
- 
-    plt.tight_layout()
-    plt.savefig("data/plots/metrics_vs_latent_dim.png", dpi=150, bbox_inches="tight")
-    plt.show()
- 
- 
-# ─────────────────────────────────────────────
-# Main runners
-# ─────────────────────────────────────────────
- 
-def run_all_eval_plots(dims=MODELS_DIM):
-    import os
-    os.makedirs("data/plots", exist_ok=True)
- 
-    print("1/8  Metrics vs. transport fraction by dim…")
-    plot_metrics_vs_fraction_by_dim(dims)
- 
-    print("2/8  Normalised metrics overlay…")
-    plot_normalized_metrics_overlay(dims)
- 
-    print("3/8  Final-step bar comparison…")
-    plot_final_step_bar_comparison(dims)
- 
-    print("4/8  Shaded trajectory gap…")
-    plot_shaded_trajectory_gap(dims)
- 
-    print("5/8  Transport image checkpoints…")
-    for dim in dims:
-        plot_transport_checkpoints(f"ae_model_dim_{dim}")
- 
-    print("6/8  Sinkhorn vs. SB side-by-side…")
-    for dim in dims:
-        plot_sinkhorn_vs_sb_side_by_side(f"ae_model_dim_{dim}")
- 
-    print("7/8  FID vs. MMD scatter…")
-    plot_fid_vs_mmd_scatter(dims)
- 
-    print("8/8  Metrics vs. latent dimension…")
-    plot_metrics_vs_latent_dim(dims)
- 
-    print("Done.")
- 
- 
+
+        plt.savefig(
+            f"{save_dir}/mmd_image_heatmap_full_dim_{latent_dim}.png",
+            dpi=300
+        )
+        plt.close()
+    
+    
 if __name__ == "__main__":
     training_data, test_data = getData()
     loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
@@ -606,4 +413,4 @@ if __name__ == "__main__":
     plot_latent_clusters(training_data, model)
     pca_visualize_for_high_dimension(training_data, model)
  
-    run_all_eval_plots()
+

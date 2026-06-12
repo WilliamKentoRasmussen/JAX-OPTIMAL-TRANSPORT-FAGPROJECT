@@ -46,9 +46,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-#data
-
-.data/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -183,7 +180,8 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 *.npy
-data/
+data/**
+!data/evaluation_summary.csv
 figures/
 models/
 training_history.csv

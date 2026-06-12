@@ -17,7 +17,7 @@ import time
 from main_project.model import AEv2
 from main_project.utils import load
 from main_project.data import getData, getDataloader
-from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION
+from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION, TQDM_SINKHORN,VERBOSE_OPTIMAL_TRANSPORT
 
 
 gamma = 1e-3
@@ -106,7 +106,7 @@ def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000, stop_thresh=1e-7, verbose=F
     u = jnp.zeros_like(s)
     v = jnp.zeros_like(d)
 
-    for iter in tqdm(range(max_iters), desc="Sinkhorn iteration"):
+    for iter in tqdm(range(max_iters), desc="Sinkhorn iteration", disable=TQDM_SINKHORN):
         u_prev = u   # ← save before update
         v_prev = v   # ← save before update
 
@@ -148,8 +148,8 @@ def load_source_and_target_arrays(source_label=0, target_label=1):
     return source_arr, target_arr
 
 
-def run_sinkhorn_by_model(model,gamma,distance_metric="euclidean"):
-    source_arr, target_arr = load_source_and_target_arrays()
+def run_sinkhorn_by_model(model, gamma,distance_metric="euclidean", source_label=0, target_label=1):
+    source_arr, target_arr = load_source_and_target_arrays(source_label, target_label)
 
     def recon(x):
         recon, z = model(x)

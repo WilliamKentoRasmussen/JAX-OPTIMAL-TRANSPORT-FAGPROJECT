@@ -1,23 +1,32 @@
-import jax.numpy as jnp
-import jax
-import numpy as np
-import matplotlib.pyplot as plt
-from typing import Union
-import numpy as np
-import torch
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-import jax.numpy as jnp
-import jax
 import os
-import jax.random as jr
 import re
 import time
+import pickle
+import torch
+from typing import Union
+from itertools import combinations
+
+import numpy as np
 import pandas as pd
+import jax
+import jax.numpy as jnp
+import jax.random as jr
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
 from main_project.model import AEv2
 from main_project.utils import load, load_with_hyperparams
 from main_project.data import getData, getDataloader
-from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION,GAMMA
+from main_project.environment import (
+    GAMMA, 
+    MODELS_DIM, 
+    INTERMEDIATE_FRACTIONS, 
+    MAX_POINTS, 
+    MAX_ITERATION, 
+    LABELS, 
+    SAVE_INTERMEDIATE,
+    VERBOSE_OPTIMAL_TRANSPORT
+)
 
 from main_project.sinkhorn import (
     run_sinkhorn_by_model,
@@ -32,17 +41,9 @@ from main_project.schrodinger_bridge import SchrodingerBridge, density_weights, 
 stop_threshold = 1e-5
 gamma = 1e-3
 
-def load_model(model_name: str) -> AEv2:
-    latent_dim = int(re.search(r"_(\d+)", model_name).group(1))
-
-    return load(name=model_name, path="models", latent_dim=latent_dim)  #
-
 
 def get_trajectory(source, target, P, decoder=None):
-    """
-    Computes all trajectory data in a single pass.
-    Always returns both latent and image data.
-    """
+
     decode   = decoder if decoder is not None else lambda z: z
     n_points = min(MAX_POINTS, len(source))
 
@@ -53,93 +54,74 @@ def get_trajectory(source, target, P, decoder=None):
     expected_target_latent = []
     original_target_latent = []
 
+
+    fractions = jnp.array(INTERMEDIATE_FRACTIONS)  
+
     for i in range(n_points):
-        p_y_given_x    = get_probability_y_given_x(P, i)
-        x_star         = jnp.array(source[i].squeeze())
-        y_point        = jnp.array(target[i].squeeze())
+        p_y_given_x     = get_probability_y_given_x(P, i)
+        x_star          = jnp.array(source[i].squeeze())
+        y_point         = jnp.array(target[i].squeeze())
         expected_target = jnp.array((p_y_given_x @ target).squeeze())
 
-        # Latent
+
         expected_target_latent.append(expected_target)
         original_target_latent.append(y_point)
 
-        # Images — computed in same pass
+
         source_images.append(np.array(decode(x_star)))
         target_images.append(np.array(decode(y_point)))
         expected_target_images.append(np.array(decode(expected_target)))
-        intermediate_images.append([
-            np.array(decode((1 - f) * x_star + f * expected_target))
-            for f in INTERMEDIATE_FRACTIONS
-        ])
+
+        # Optimized Intermediate Latent & Image decoding
+        if SAVE_INTERMEDIATE:
+            # Vectorized calculation of intermediate mixtures: shape (F, latent_dim)
+            # (1 - f) * x_star + f * expected_target
+            inter_latents = (1.0 - fractions[:, None]) * x_star + fractions[:, None] * expected_target
+            
+            # Using vmap to decode all intermediate frames efficiently at once
+            decoded_inter = jax.vmap(decode)(inter_latents)
+            intermediate_images.append(np.array(decoded_inter))
 
     return {
         # Latent
-        "y_original":       np.array(original_target_latent),
-        "expected_target":  np.array(expected_target_latent),
+        "target":             np.array(original_target_latent),
+        "expected_target":        np.array(expected_target_latent),
         # Images
-        "original_images":        np.array(source_images),
+        "source_images":        np.array(source_images),
         "target_images":          np.array(target_images),
         "expected_target_images": np.array(expected_target_images),
         "intermediate_images":    np.array(intermediate_images),
     }
 
 
-def save_sinkhorn_transformation(model_name, save=True, gamma=1e-3):
+def save_sinkhorn_transformation(model_name, gamma=1e-3, source_label=0, target_label=1):
     model = load_with_hyperparams(name=model_name, path="models")
 
     t0 = time.perf_counter()
-    latent_source, latent_target, P, u, v, iter = run_sinkhorn_by_model(model, gamma=gamma)
+    latent_source, latent_target, P, u, v, iter_count = run_sinkhorn_by_model(
+        model, gamma=gamma, source_label=source_label, target_label=target_label
+    )
     t1 = time.perf_counter()
 
-    # Single pass — always compute everything
+
     trajectory = get_trajectory(
         latent_source, latent_target,
         P=P,
         decoder=model.decoder,
     )
     t2 = time.perf_counter()
-    print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
+    if (VERBOSE_OPTIMAL_TRANSPORT): print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
 
-    if save:
-        save_dir = f"data/{model_name}_{gamma}"
-        os.makedirs(save_dir, exist_ok=True)
+    keys_to_save = [
+        "target", "expected_target", "source_images", 
+        "target_images", "expected_target_images"
+    ]
+    if SAVE_INTERMEDIATE:
+        keys_to_save.append("intermediate_images")
 
-        # Choose which keys to save based on latent_evaluate flag
-        keys_to_save = (
-            ["y_original", "expected_target","original_images", "target_images",
-                  "expected_target_images", "intermediate_images"]
-        )
+    sinhorn_trajectory = {key: trajectory[key] for key in keys_to_save}
 
-        for key in keys_to_save:
-            np.save(f"{save_dir}/{key}.npy", trajectory[key])
-
-        print(f"  saved {keys_to_save} to {save_dir}/")
-
-    return iter
-
-
-
-
-# def save_sinkhorn_transformation_without_ae(save=True):
-#     source_arr, target_arr = load_source_and_target_arrays()
-#     t0 = time.perf_counter()
-#     C = cdist_euclidean(source_arr, target_arr)
-#     s = jnp.ones(source_arr.shape[0]) / source_arr.shape[0]
-#     d = jnp.ones(target_arr.shape[0]) / target_arr.shape[0]
-#     P, u, v, iter = sinkhorn_log(
-#         C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=stop_threshold, verbose=True
-#     )
-#     t1 = time.perf_counter()
-#     trajectory = get_trajectory(source_arr, target_arr, P=P, decoder=None)
-#     t2 = time.perf_counter()
-#     print(f"  sinkhorn: {t1-t0:.2f}s  |  decoding: {t2-t1:.2f}s")
-
-#     if save:
-#         save_dir = f"data/no_ae_{gamma}"
-#         os.makedirs(save_dir, exist_ok=True)
-
-#         for img_name, img_matrix in trajectory.items():
-#             np.save(f"{save_dir}/{img_name}.npy", np.array(img_matrix))
+    return iter_count, sinhorn_trajectory
 
 
 def encode_with_model(model: AEv2, source_arr, target_arr):
@@ -155,28 +137,6 @@ def encode_with_model(model: AEv2, source_arr, target_arr):
     latent_target = latent_target[:min_count]
 
     return latent_source, latent_target
-
-
-
-
-# def save_sb_transformation(model_name, save=True):
-#     model = load_model(model_name=model_name)
-#     source_arr, target_arr = load_source_and_target_arrays()
-#     latent_source, latent_target = encode_with_model(model, source_arr=source_arr, target_arr=target_arr)
-
-#     t0 = time.perf_counter()
-#     bridge, P = run_sb(latent_source, latent_target)
-#     t1 = time.perf_counter()
-#     result = bridge.sample_trajectories(P=P, model=model, n_samples=MAX_POINTS)
-#     t2 = time.perf_counter()
-
-#     print(f"  IPF fit: {t1-t0:.2f}s  |  trajectory sampling: {t2-t1:.2f}s")
-
-#     if save:
-#         save_dir = f"data/sb_{model_name}"
-#         os.makedirs(save_dir, exist_ok=True)
-#         np.save(f"{save_dir}/decoded.npy", result["decoded"])
-#         np.save(f"{save_dir}/trajectories.npy", result["trajectories"])
 
 
 def warmup_jax(n, dim):
@@ -195,14 +155,40 @@ def save_transformations():
     for dim in MODELS_DIM:
         model_name = f"ae_best_model_bo_{dim}"
         print(f"\n--- dim={dim} ---")
-        for gamma in GAMMA:
-            print(f"  gamma={gamma}")
-            start = time.perf_counter()
-            iter = save_sinkhorn_transformation(model_name=model_name, save=True, latent_evaluate=True, gamma=gamma)
-            elapsed = time.perf_counter() - start
-            data.append((dim, gamma, iter, elapsed))
+        
+        model_transport_data = {}
 
-    df = pd.DataFrame(data, columns=["dim", "gamma", "sinkhorn_iterations", "sinkhorn_time"])
+        for gamma_val in GAMMA:
+            print(f"\n--- gamma={gamma_val} ---")
+            
+            if gamma_val not in model_transport_data:
+                model_transport_data[gamma_val] = {}
+
+            for (source_label, target_label) in combinations(LABELS, 2):
+                if(VERBOSE_OPTIMAL_TRANSPORT): print(f"\n--- source = {source_label} and target = {target_label} ---") 
+                start = time.perf_counter()
+                
+                iter_count, sinhorn_trajectory = save_sinkhorn_transformation(
+                    model_name=model_name, gamma=gamma_val, source_label=source_label, target_label=target_label
+                )
+
+                elapsed = time.perf_counter() - start
+                data.append((dim, gamma_val, iter_count, elapsed, source_label, target_label))
+                
+                # Assignment using structured string keys without nested initialization collision
+                label_key = f"source_{source_label}_target_{target_label}"
+                model_transport_data[gamma_val][label_key] = sinhorn_trajectory
+                
+
+        pickle_filename = f"data/{model_name}_ot_data.pkl"
+        with open(pickle_filename, "wb") as f:
+            pickle.dump(model_transport_data, f)
+        print(f"Saved optimal transport data to {pickle_filename}")
+
+
+    df = pd.DataFrame(data, columns=["dim", "gamma", "sinkhorn_iterations", "sinkhorn_time", "source_label", "target_label"])
     df.to_csv("sinkhorn_iterations_and_times.csv", index=False)
+
+
 if __name__ == "__main__":
     save_transformations()
