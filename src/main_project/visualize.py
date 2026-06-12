@@ -335,7 +335,7 @@ def plot_latent_dim_vs_average_mmd(summary_df,
 
     plt.show()
 
-def plot_mmd_image_heatmaps_full(summary_df, save_dir="figures/heatmaps"):
+def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatmaps"):
 
     os.makedirs(save_dir, exist_ok=True)
 
@@ -397,7 +397,7 @@ def plot_mmd_image_heatmaps_full(summary_df, save_dir="figures/heatmaps"):
 
         plt.tight_layout()
 
-        plt.savefig(
+        if save: plt.savefig(
             f"{save_dir}/mmd_image_heatmap_full_dim_{latent_dim}.png",
             dpi=300
         )
@@ -405,12 +405,18 @@ def plot_mmd_image_heatmaps_full(summary_df, save_dir="figures/heatmaps"):
     
     
 if __name__ == "__main__":
-    training_data, test_data = getData()
-    loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
-    model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
-    plot_training_loss(loss_data)
-    plot_reconstruction(training_data, model)
-    plot_latent_clusters(training_data, model)
-    pca_visualize_for_high_dimension(training_data, model)
+
+
+    "data/evaluation_summary.csv", index=False
+    
+    summary_df = pd.read_csv("data/evaluation_summary.csv")
+    plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
+    # training_data, test_data = getData()
+    # loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
+    # model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
+    # plot_training_loss(loss_data)
+    # plot_reconstruction(training_data, model)
+    # plot_latent_clusters(training_data, model)
+    # pca_visualize_for_high_dimension(training_data, model)
  
 
