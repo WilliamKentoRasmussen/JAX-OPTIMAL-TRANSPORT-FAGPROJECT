@@ -122,6 +122,13 @@ def classifier_confidence(transported_images, target_class=1):
     return jnp.mean(p_target)
 
 
+def entropy_for_transport_plan(T: jnp.ndarray):
+    mask = T > 0
+    entropy = -jnp.sum(jnp.where(mask, T * jnp.log(T), 0.0))
+    return entropy
+
+
+
 def evaluate_latent_space_knn(latent_array, labels):
     classifier = KNeighborsClassifier(n_neighbors=6)  # 5 by default
     knn_acc = cross_val_score(classifier, latent_array, labels, cv=5).mean()
@@ -174,6 +181,7 @@ def evaluate_by_model_in_latent_space(sinkhorn_data):
 
     mmd = MMD(jnp.asarray(target), jnp.asarray(expected_target), kernel="rbf", is_latent=True)
     wasserstein_distance = wasserstein_distance_subsampled(np.asarray(expected_target), np.asarray(target))
+
     # wasserstein_distance= 0
     return mmd, wasserstein_distance
 
@@ -240,6 +248,9 @@ def run_evaluation():
                 )
                 # fid_img =
 
+                entropy = entropy_for_transport_plan(jnp.asarray(sinkhorn_data["P"]))
+
+
                 summary.append(
                     {
                         "latent_dim": dim,
@@ -252,6 +263,9 @@ def run_evaluation():
                         "classifier_confidence_image": classifier_conf_img,
                         # "fid_image": fid_img,
                         "wasserstein_distance": wasserstein_distance_img,
+                        "entropy": entropy,
+                        "running_time": sinkhorn_data["running_time"],
+                        "iter_count": sinkhorn_data["iter_count"],
                     }
                 )
 

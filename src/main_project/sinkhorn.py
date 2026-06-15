@@ -103,8 +103,8 @@ def sinkhorn_simple(
                 print(f"Converged at iteration {i}")
             break
 
-    # Outer product scaling: T[i,j] = u[i] * K[i,j] * v[j]
-    P = u[:, None] * K * v[None, :]
+    # Outer product scaling: T[i,j] = u[i] * K[i,j] * v[j] Elementwisemultiplicaiton? 
+    P = u[:, None] * K * v[None, :] #Output: (3, 1) instead of (3,) 
     return P, u, v
 
 
@@ -131,6 +131,23 @@ def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000, stop_thresh=1e-7, verbose=F
     P = jnp.exp(log_P)
     return P, u, v, iter
 
+
+def timed_sinkhorn(C, s, d, gamma):
+    start = time.perf_counter()
+
+    P, u, v, iters = sinkhorn_log(
+        C=C,
+        s=s,
+        d=d,
+        gamma=gamma,
+        max_iters=MAX_ITERATION,
+        stop_thresh=STOP_THRESSHOLD,
+        verbose=False
+    )
+
+    jax.block_until_ready(P)
+
+    return P, u, v, iters, time.perf_counter() - start
 
 def load_source_and_target_arrays(source_label=0, target_label=1):
     _, test_data = getData()
@@ -179,13 +196,13 @@ def run_sinkhorn_by_model(model, gamma, distance_metric="euclidean", source_labe
     d = jnp.ones(latent_target.shape[0]) / latent_target.shape[0]
 
     # Now uniform weights work fine — equal n and m
-    P, u, v, iter = sinkhorn_log(
-        C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=STOP_THRESSHOLD, verbose=True
+    P, u, v, iter, running_time = timed_sinkhorn(
+        C=C, s=s, d=d, gamma=gamma
     )
 
     # print(f"Sinkhorn converged in {iter} iterations with gamma={gamma} and threshold={stop_threshold}")
 
-    return latent_source, latent_target, P, u, v, iter
+    return latent_source, latent_target, P, u, v, iter,running_time
 
 
 def get_probability_y_given_x(P, index):
@@ -193,11 +210,47 @@ def get_probability_y_given_x(P, index):
     return p_y_given_x
 
 
+
+def warmup_jax(n: int = 500, dim: int = 2):
+    """Pre-compile JIT-traced functions with dummy data to avoid XLA
+    compilation overhead in subsequent timed runs.
+
+    Args:
+        n:   Number of points (rows) to use for the warmup cost matrix.
+        dim: Latent dimensionality — must match the real run so the compiled
+             kernel is actually reused (XLA keys on array shapes).
+    """
+    print(f"[warmup] compiling kernels for n={n}, dim={dim} ...")
+    key = jr.PRNGKey(0)
+    x = jr.normal(key, (n, dim))
+    y = jr.normal(key, (n, dim))
+
+    # Compile cdist
+    C = cdist_euclidean(x, y)
+    jax.block_until_ready(C)
+
+    # Compile sinkhorn_log (runs the full loop once)
+    s = jnp.ones(n) / n
+    d = jnp.ones(n) / n
+    P, u, v, iters = sinkhorn_log(
+        s=s,
+        d=d,
+        C=C,
+        gamma=gamma,
+        max_iters=5,      # just enough to trace; don't waste time here
+        stop_thresh=1e-1,
+        verbose=False,
+    )
+    jax.block_until_ready(P)
+
+    print(f"[warmup] done.")
+
 def main():
     data = []
     running_times = {}
-    # warmup_jax(n=MAX_POINTS, dim=MODELS_DIM[0]) run only when interested in running time
+    #warmup_jax(n=MAX_POINTS, dim=MODELS_DIM[0]) run only when interested in running time
     for dim in MODELS_DIM:
+        warmup_jax(n=MAX_POINTS, dim=dim)
         model_name = f"ae_best_model_{dim}"
         for gamma in GAMMA:
             model = load(model_name)
