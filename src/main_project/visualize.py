@@ -7,16 +7,19 @@ import jax.random as jr
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
+import pickle
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.decomposition import PCA
+from main_project.utils import load_with_hyperparams
+from scipy import stats
 from sklearn.neighbors import KNeighborsClassifier
 
 from main_project.utils import load, load_with_hyperparams
 from main_project.data import getData  # fixed
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
-from main_project.utils import load
-from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, LABELS
+from main_project.environment import LABELS
+from main_project.data import getData
 import os
 
 labels_map = {i: str(i) for i in range(10)}
@@ -323,46 +326,379 @@ def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatma
     os.makedirs(save_dir, exist_ok=True)
 
     labels = LABELS
+    latent_dims = sorted(summary_df["latent_dim"].unique())
 
-    # Laver et heatmap for hvert dimension
-    for latent_dim in sorted(summary_df["latent_dim"].unique()):
+    # Shared color scale across all dims so they are visually comparable
+    global_vmin = summary_df["mmd_image"].min()
+    global_vmax = summary_df["mmd_image"].max()
+
+    matrices = {}
+    for latent_dim in latent_dims:
         model_df = summary_df[summary_df["latent_dim"] == latent_dim]
-
         matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
-
         grouped = model_df.groupby(["source_label", "target_label"])["mmd_image"].mean()
-
         for (src, tgt), value in grouped.items():
             matrix.loc[src, tgt] = value
+        matrices[latent_dim] = matrix
 
         fig, ax = plt.subplots(figsize=(8, 8))
-
-        im = ax.imshow(matrix)
-
+        im = ax.imshow(matrix, vmin=global_vmin, vmax=global_vmax, cmap="viridis_r")
         ax.set_xticks(range(len(labels)))
         ax.set_xticklabels(labels)
-
         ax.set_yticks(range(len(labels)))
         ax.set_yticklabels(labels)
-
         ax.set_xlabel("Target Label")
         ax.set_ylabel("Source Label")
-        ax.set_title(f"MMD Image Heatmap (avg γ)\nLatent Dim = {latent_dim}")
-
+        ax.set_title(f"MMD Image Heatmap (avg over γ)\nLatent Dim = {latent_dim}  |  mean = {model_df['mmd_image'].mean():.3f}")
         plt.colorbar(im, ax=ax, label="MMD Image")
 
         for i in range(len(labels)):
             for j in range(len(labels)):
                 val = matrix.iloc[i, j]
-
                 if not np.isnan(val):
-                    ax.text(j, i, f"{val:.2f}", ha="center", va="center", fontsize=7)
+                    ax.text(j, i, f"{val:.3f}", ha="center", va="center", fontsize=7)
 
         plt.tight_layout()
-
         if save:
             plt.savefig(f"{save_dir}/mmd_image_heatmap_full_dim_{latent_dim}.png", dpi=300)
         plt.close()
+
+
+def plot_mmd_latent_heatmaps_full(summary_df, save=True, save_dir="figures/heatmaps"):
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    labels = LABELS
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+
+    # Shared color scale across all dims
+    global_vmin = summary_df["mmd_latent"].min()
+    global_vmax = summary_df["mmd_latent"].max()
+
+    matrices = {}
+    for latent_dim in latent_dims:
+        # Average over all gammas (was wrongly filtered to gamma=0.1 before)
+        model_df = summary_df[summary_df["latent_dim"] == latent_dim]
+        matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
+        grouped = model_df.groupby(["source_label", "target_label"])["mmd_latent"].mean()
+        for (src, tgt), value in grouped.items():
+            matrix.loc[src, tgt] = value
+        matrices[latent_dim] = matrix
+
+        _, ax = plt.subplots(figsize=(8, 8))
+        im = ax.imshow(matrix, vmin=global_vmin, vmax=global_vmax, cmap="viridis_r")
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels)
+        ax.set_yticks(range(len(labels)))
+        ax.set_yticklabels(labels)
+        ax.set_xlabel("Target Label")
+        ax.set_ylabel("Source Label")
+        ax.set_title(f"MMD Latent Heatmap (avg over γ)\nLatent Dim = {latent_dim}  |  mean = {model_df['mmd_latent'].mean():.4f}")
+        plt.colorbar(im, ax=ax, label="MMD Latent")
+
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                val = matrix.iloc[i, j]
+                if not np.isnan(val):
+                    ax.text(j, i, f"{val:.4f}", ha="center", va="center", fontsize=7)
+
+        plt.tight_layout()
+        if save:
+            plt.savefig(f"{save_dir}/mmd_latent_heatmap_full_dim_{latent_dim}.png", dpi=300)
+        plt.close()
+
+def plot_mmd_heatmaps_individual(summary_df, gamma=0.1, save=True, save_dir="figures/heatmaps"):
+    """Per-dim figure: MMD Image (left) + MMD Latent (right) at a fixed gamma, each with its own colorbar."""
+    os.makedirs(save_dir, exist_ok=True)
+    labels = LABELS
+    df = summary_df[summary_df["gamma"] == gamma]
+    latent_dims = sorted(df["latent_dim"].unique())
+
+    for latent_dim in latent_dims:
+        model_df = df[df["latent_dim"] == latent_dim]
+
+        img_matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
+        lat_matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
+
+        for (src, tgt), val in model_df.groupby(["source_label", "target_label"])["mmd_image"].mean().items():
+            img_matrix.loc[src, tgt] = val
+        for (src, tgt), val in model_df.groupby(["source_label", "target_label"])["mmd_latent"].mean().items():
+            lat_matrix.loc[src, tgt] = val
+
+        fig, (ax_img, ax_lat) = plt.subplots(1, 2, figsize=(16, 7))
+
+        im1 = ax_img.imshow(img_matrix, cmap="viridis_r")
+        ax_img.set_xticks(range(len(labels)))
+        ax_img.set_xticklabels(labels)
+        ax_img.set_yticks(range(len(labels)))
+        ax_img.set_yticklabels(labels)
+        ax_img.set_xlabel("Target Label")
+        ax_img.set_ylabel("Source Label")
+        ax_img.set_title(f"MMD Image  |  mean = {model_df['mmd_image'].mean():.3f}")
+        plt.colorbar(im1, ax=ax_img, label="MMD Image")
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                val = img_matrix.iloc[i, j]
+                if not np.isnan(val):
+                    ax_img.text(j, i, f"{val:.3f}", ha="center", va="center", fontsize=7)
+
+        im2 = ax_lat.imshow(lat_matrix, cmap="viridis_r")
+        ax_lat.set_xticks(range(len(labels)))
+        ax_lat.set_xticklabels(labels)
+        ax_lat.set_yticks(range(len(labels)))
+        ax_lat.set_yticklabels(labels)
+        ax_lat.set_xlabel("Target Label")
+        ax_lat.set_ylabel("Source Label")
+        ax_lat.set_title(f"MMD Latent  |  mean = {model_df['mmd_latent'].mean():.4f}")
+        plt.colorbar(im2, ax=ax_lat, label="MMD Latent")
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                val = lat_matrix.iloc[i, j]
+                if not np.isnan(val):
+                    ax_lat.text(j, i, f"{val:.4f}", ha="center", va="center", fontsize=7)
+
+        fig.suptitle(f"MMD Heatmaps — Latent Dim = {latent_dim}  (γ = {gamma})", fontsize=14)
+        plt.tight_layout()
+        if save:
+            plt.savefig(f"{save_dir}/mmd_heatmap_combined_dim_{latent_dim}.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+
+def plot_latent_space_dim(model, dim, x_sub, labels_sub, point_size=4, alpha=0.6, save=True, save_dir="figures/plots"):
+    """
+    Latent-space scatter for a single model/dim.
+    dim == 2  → direct scatter; dim > 2 → PCA projection to 2 components.
+    """
+    _, z = jax.vmap(model)(x_sub)
+    z = np.array(z)
+
+    if dim <= 2:
+        z2 = z
+        xlabel, ylabel = r"Latent $z_1$", r"Latent $z_2$"
+        method = "direct"
+    else:
+        pca = PCA(n_components=2)
+        z2 = pca.fit_transform(z)
+        var = pca.explained_variance_ratio_
+        xlabel = f"PC1 ({var[0]*100:.1f}%)"
+        ylabel = f"PC2 ({var[1]*100:.1f}%)"
+        method = "PCA"
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    scatter = ax.scatter(z2[:, 0], z2[:, 1], c=labels_sub, cmap="tab10", s=point_size, alpha=alpha)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(f"Latent Space — Dim={dim}  ({method})")
+    ax.set_aspect("equal")
+    plt.colorbar(scatter, ax=ax).set_label("Digit")
+    plt.tight_layout()
+    if save:
+        os.makedirs(save_dir, exist_ok=True)
+        plt.savefig(f"{save_dir}/latent_space_dim_{dim}.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+
+def plot_sinkhorn_iterations_vs_gamma(
+    csv_path="sinkhorn_iterations_and_times.csv",
+    save_dir="figures/plots",
+    save=True,
+    alpha=0.01,
+):
+    df = pd.read_csv(csv_path)
+    os.makedirs(save_dir, exist_ok=True)
+    gammas = sorted(df["gamma"].unique())
+
+    samples = [
+        df.loc[df["gamma"] == g, "sinkhorn_iterations"].values
+        for g in gammas
+    ]
+    means = np.array([np.mean(s) for s in samples])
+    stds  = np.array([np.std(s, ddof=1) if len(s) > 1 else 0.0 for s in samples])
+
+    # Walk consecutive pairs: stop at first non-significant drop
+    best_idx = 0
+    for i in range(len(gammas) - 1):
+        # One-sided: is samples[i] > samples[i+1]? (higher gamma → fewer iterations)
+        _, p = stats.ttest_ind(samples[i], samples[i + 1], alternative="greater")
+        if p >= alpha:
+            best_idx = i  # no significant improvement beyond this gamma
+            break
+    else:
+        best_idx = len(gammas) - 1  # all differences significant, take largest
+    best_gamma = gammas[best_idx]
+
+    _, ax = plt.subplots(figsize=(8, 5))
+    ax.errorbar(
+        gammas, means, yerr=[np.minimum(stds, means), stds],
+        fmt="o-", linewidth=2, markersize=6,
+        capsize=4, capthick=1.5,
+        color="steelblue", ecolor="steelblue", elinewidth=1, alpha=0.9,
+        label="mean ± std"
+    )
+    ax.axvline(best_gamma, color="tomato", linestyle="--", linewidth=1.5,
+               label=f"best γ={best_gamma:.4f} (first non-significant step, α={alpha})")
+
+    ax.set_xscale("log")
+    ax.set_xlabel(r"$\gamma$", fontsize=13)
+    ax.set_ylabel("Sinkhorn Iterations", fontsize=13)
+    ax.set_title(r"Sinkhorn Iterations vs $\gamma$", fontsize=14)
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    plt.tight_layout()
+
+    if save:
+        plt.savefig(f"{save_dir}/sinkhorn_iterations_vs_gamma.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+    print(f"Best γ: {best_gamma:.4f}  →  {means[best_idx]:.1f} ± {stds[best_idx]:.1f} iterations")
+    print(f"\nPairwise t-tests (one-sided, α={alpha}):")
+    for i in range(len(gammas) - 1):
+        _, p = stats.ttest_ind(samples[i], samples[i + 1], alternative="greater")
+        sig = "✓ significant" if p < alpha else "✗ not significant ← stop"
+        print(f"  γ={gammas[i]:.4f} vs γ={gammas[i+1]:.4f}:  p={p:.4f}  {sig}")
+
+
+def plot_interpolation_paths_across_dims(
+    dims=None,
+    gamma=0.1,
+    source_label=0,
+    target_label=1,
+    n=6,
+    seed=42,
+    fractions=[0.25, 0.5, 0.75, 1.0],
+    save=True,
+    save_dir="figures/plots",
+):
+    """
+    Show interpolation paths from source → transported latent for each dim.
+
+    Layout (rows × cols):
+      rows = latent dimensions
+      cols = [source] [frac=0.25] [frac=0.5] [frac=0.75] [frac=1.0=transported] [target]
+
+    Args:
+        dims: list of latent dims, e.g. [2, 8, 10, 16, 32]
+        gamma: regularisation value (must exist in pickle)
+        source_label / target_label: digit pair to visualise
+        n: number of example columns per row
+        fractions: interpolation fractions to show
+    """
+    if dims is None:
+        dims = [2, 8, 10, 16, 32]
+
+    pair_key = f"source_{source_label}_target_{target_label}"
+    rng = np.random.default_rng(seed)
+
+    # Load models and data for each dim
+    rows_data = []
+    source_imgs = None
+    target_imgs = None
+
+    for dim in dims:
+        pkl_path = f"data/ae_best_model_bo_{dim}_ot_data.pkl"
+        model_path = f"ae_best_model_bo_{dim}"
+
+        if not os.path.exists(pkl_path):
+            print(f"Missing {pkl_path}, skipping dim={dim}")
+            continue
+
+        # Load OT data
+        with open(pkl_path, "rb") as f:
+            ot_data = pickle.load(f)
+
+        if gamma not in ot_data or pair_key not in ot_data[gamma]:
+            print(f"dim={dim}: gamma={gamma} or pair '{pair_key}' not found, skipping")
+            continue
+
+        entry = ot_data[gamma][pair_key]
+        source_imgs_raw = entry["source_images"]  # (N, 784)
+        target_latent = entry["target"]           # (N, dim)
+        n_avail = target_latent.shape[0]
+
+        # Fix random indices across dims for alignment
+        if source_imgs is None:
+            idx = rng.choice(n_avail, size=min(n, n_avail), replace=False)
+            source_imgs = source_imgs_raw[idx]
+            target_imgs = entry["target_images"][idx]
+
+        source_imgs_batch = source_imgs_raw[idx]
+        target_latent_batch = target_latent[idx]
+
+        # Load model and encode source to get source_latent
+        model = load_with_hyperparams(model_path)
+        source_imgs_jnp = jnp.asarray(source_imgs_batch)
+        _, source_latent_batch = jax.vmap(model)(source_imgs_jnp)
+        source_latent_batch = np.array(source_latent_batch)
+
+        # Interpolate and decode
+        dim_interps = []
+        for frac in fractions:
+            # Linear interpolation: frac=0 → source_latent, frac=1 → target_latent
+            interp_latent = (
+                (1 - frac) * source_latent_batch + frac * target_latent_batch
+            )
+            interp_latent_jnp = jnp.asarray(interp_latent)
+            # Decode the interpolated latent: use model.decoder not the full model
+            interp_images = jax.vmap(model.decoder)(interp_latent_jnp)
+            dim_interps.append(np.array(interp_images))
+
+        # Row layout: [source] + [interpolations at each fraction]
+        # Note: t=1.0 is the transported latent, so no separate target column needed
+        row_data = [source_imgs] + dim_interps
+        rows_data.append((dim, row_data))
+
+    if not rows_data:
+        print("No data loaded — check pickle paths and gamma/pair values.")
+        return
+
+    n_rows = len(rows_data)
+    n_cols = len(fractions) + 1  # source + fractions (t=1.0 is already transported)
+    actual_n = min(n, source_imgs.shape[0])
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 1.3, n_rows * 1.3))
+    fig.subplots_adjust(left=0.15, right=0.98, top=0.96, bottom=0.05)
+
+    col_labels = (
+        ["Source"]
+        + [f"t={f}" for f in fractions]
+    )
+
+    for r, (dim, row_imgs) in enumerate(rows_data):
+        for c in range(n_cols):
+            ax = axes[r, c]
+            # row_imgs[c] has shape (actual_n, 784); show first example
+            ax.imshow(row_imgs[c][0].reshape(28, 28), cmap="gray")
+            ax.axis("off")
+
+    # Col labels on top
+    for c, label in enumerate(col_labels):
+        axes[0, c].set_title(label, fontsize=10, fontweight="bold", pad=6)
+
+    # Add dimension labels as text on the left (outside subplots)
+    for r, (dim, _) in enumerate(rows_data):
+        fig.text(
+            0.06,
+            0.92 - r * (0.85 / n_rows),
+            f"Dim={dim}",
+            fontsize=11,
+            fontweight="bold",
+            va="center",
+            ha="right",
+        )
+
+    fig.suptitle(
+        f"Interpolation Paths: {source_label}→{target_label}  (γ={gamma})",
+        fontsize=12,
+    )
+    plt.tight_layout()
+
+    if save:
+        os.makedirs(save_dir, exist_ok=True)
+        fname = f"{save_dir}/interp_paths_{source_label}_to_{target_label}_gamma_{gamma}.png"
+        plt.savefig(fname, dpi=200, bbox_inches="tight")
+        print(f"Saved → {fname}")
+
+    plt.show()
 
 def evaluate_KNN_lantent_quality(model_name="ae_best_model_bo_2", number_neighbors = 5):
     training_data, test_data = getData()
@@ -454,14 +790,39 @@ def plot_reconstruction_for_all_dim(save = False):
         plt.savefig("figures/all_dim_reconstruction.png", dpi=150, bbox_inches="tight")
     plt.show()
 
+
+    
+
+    
+
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
     figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    plot_interpolation_paths_across_dims(source_label=5,target_label=7)
     # plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
     # training_data, test_data = getData()
     # loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
     # model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
-    # plot_training_loss(loss_data)
-    # plot_reconstruction(training_data, model)
-    # plot_latent_clusters(training_data, model)
-    # pca_visualize_for_high_dimension(training_data, model)
+
+
+
+    # plot_gamma_vs_mmd(summary_df)
+    # plot_latent_dim_vs_average_mmd(summary_df)
+    # plot_mmd_heatmaps_individual(summary_df=summary_df, gamma=0.1, save=True)
+
+    # training_data, _ = getData()
+
+    # xs, ys = [], []
+    # for img, label in training_data:
+    #     xs.append(img.numpy())
+    #     ys.append(label)
+    # x_full = jnp.array(xs).reshape(len(xs), -1)
+    # labels_full = np.array(ys)
+    # n = len(x_full)
+    # idx = np.random.choice(n, size=min(20000, n), replace=False)
+    # x_sub = x_full[idx]
+    # labels_sub = labels_full[idx]
+
+    # for dim in [2, 8, 10, 16, 32]:
+    #     model = load_with_hyperparams(f"ae_best_model_bo_{dim}")
+    #     plot_latent_space_dim(model, dim, x_sub, labels_sub, save=True, save_dir="figures/plots")
