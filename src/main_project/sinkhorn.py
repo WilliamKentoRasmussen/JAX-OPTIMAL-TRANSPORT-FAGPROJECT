@@ -150,7 +150,7 @@ def timed_sinkhorn(C, s, d, gamma):
 
     return P, u, v, iters, time.perf_counter() - start
 
-def load_source_and_target_arrays(source_label=0, target_label=1):
+def load_source_and_target_arrays(source_label=0, target_label=1, eval_fraction=0.3):
     _, test_data = getData()
     test_loader = getDataloader(test_data)
 
@@ -170,25 +170,31 @@ def load_source_and_target_arrays(source_label=0, target_label=1):
     source_arr = source_arr[:min_count]
     target_arr = target_arr[:min_count]
 
-    return source_arr, target_arr
+    # Reserve a held-out portion of the target for out-of-sample evaluation.
+    # Sinkhorn only sees target_transport; target_eval is never part of the plan.
+    n_eval = max(1, int(min_count * eval_fraction))
+    target_eval = target_arr[:n_eval]
+    target_transport = target_arr[n_eval:]
+
+    return source_arr, target_transport, target_eval
 
 
 def run_sinkhorn_by_model(model, gamma, distance_metric="euclidean", source_label=0, target_label=1):
-    source_arr, target_arr = load_source_and_target_arrays(source_label, target_label)
+    source_arr, target_arr, target_eval_arr = load_source_and_target_arrays(source_label, target_label)
 
     def recon(x):
         recon, z = model(x)
         return recon, z
 
     # Gets latent representation of source and target distributions
-    latent_source = jax.vmap(recon)(source_arr)[1]  # [n, latent_dim]
-    latent_target = jax.vmap(recon)(target_arr)[1]  # [m, latent_dim]
+    latent_source = jax.vmap(recon)(source_arr)[1]            # [n, latent_dim]
+    latent_target = jax.vmap(recon)(target_arr)[1]            # [m, latent_dim]
+    latent_target_eval = jax.vmap(recon)(target_eval_arr)[1]  # [k, latent_dim] — held out
 
-    # Used to ensure no out of bounds error
     min_count = min(latent_source.shape[0], latent_target.shape[0])
-
     latent_source = latent_source[:min_count]
     latent_target = latent_target[:min_count]
+
     if distance_metric == "euclidean":
         C = cdist_euclidean(latent_source, latent_target)
     elif distance_metric == "cosine":
@@ -196,14 +202,9 @@ def run_sinkhorn_by_model(model, gamma, distance_metric="euclidean", source_labe
     s = jnp.ones(latent_source.shape[0]) / latent_source.shape[0]
     d = jnp.ones(latent_target.shape[0]) / latent_target.shape[0]
 
-    # Now uniform weights work fine — equal n and m
-    P, u, v, iter, running_time = timed_sinkhorn(
-        C=C, s=s, d=d, gamma=gamma
-    )
+    P, u, v, iter, running_time = timed_sinkhorn(C=C, s=s, d=d, gamma=gamma)
 
-    # print(f"Sinkhorn converged in {iter} iterations with gamma={gamma} and threshold={stop_threshold}")
-
-    return latent_source, latent_target, P, u, v, iter,running_time
+    return latent_source, latent_target, latent_target_eval, P, u, v, iter, running_time
 
 
 def get_probability_y_given_x(P, index):
@@ -255,7 +256,7 @@ def main():
         model_name = f"ae_best_model_{dim}"
         for gamma in GAMMA:
             model = load(model_name)
-            latent_source, latent_target, P, u, v, iter = run_sinkhorn_by_model(model=model, gamma=gamma)
+            latent_source, latent_target, _, _, _, _, iter, _ = run_sinkhorn_by_model(model=model, gamma=gamma)
             data.append((model_name, gamma, iter))
         start = time.perf_counter()
         print("Saving sinkhorn transformation for", model_name)

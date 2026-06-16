@@ -9,7 +9,7 @@ from sklearn.model_selection import cross_val_score
 import pandas as pd
 import pickle
 import os
-from itertools import combinations
+from itertools import permutations
 from tqdm import tqdm
 
 # example of calculating the frechet inception distance
@@ -74,8 +74,8 @@ def median_bandwidth(x, y):
 from functools import partial
 
 
-@partial(jax.jit, static_argnames=("kernel", "is_latent"))
-def MMD(x: Array, y: Array, kernel, is_latent=False):
+@partial(jax.jit, static_argnames=("kernel"))
+def MMD(x: Array, y: Array, kernel):
     xx, yy, zz = jnp.matmul(x, x.T), jnp.matmul(y, y.T), jnp.matmul(x, y.T)
 
     rx = jnp.diag(xx)[jnp.newaxis, :]  # (1, N)
@@ -126,13 +126,6 @@ def entropy_for_transport_plan(T: jnp.ndarray):
     return entropy
 
 
-
-def evaluate_latent_space_knn(latent_array, labels):
-    classifier = KNeighborsClassifier(n_neighbors=6)  # 5 by default
-    knn_acc = cross_val_score(classifier, latent_array, labels, cv=5).mean()
-    return knn_acc
-
-
 columns = ["Fraction of transport", "MMD", "Confidence of Classifier", "FID"]
 
 
@@ -163,24 +156,22 @@ def evaluate_by_model_in_image_space(sinkhorn_data, target_label, save_dir):
     classifier_conf = classifier_confidence(expected_target_img, target_label)
     # fid = calculate_fid(np.asarray(expected_target_img), np.asarray(target_img))
 
-    # wasserstein_distance = 0
-    wasserstein_distance = wasserstein_distance_subsampled(np.asarray(expected_target_img), np.asarray(target_img))
-
     return (
         mmd,
         classifier_conf,
-        wasserstein_distance,
     )  # fid
 
 
 def evaluate_by_model_in_latent_space(sinkhorn_data):
-    target = sinkhorn_data["target"] #changed to target now
+    # Use the held-out target split that was never seen by Sinkhorn.
+    # Comparing against the in-sample target is not out-of-sample evaluation —
+    # the plan is optimised to match those exact points.
+    target_eval = sinkhorn_data["target_eval"]
     expected_target = sinkhorn_data["expected_target"]
 
-    mmd = MMD(jnp.asarray(target), jnp.asarray(expected_target), kernel="rbf", is_latent=True)
-    wasserstein_distance = wasserstein_distance_subsampled(np.asarray(expected_target), np.asarray(target))
+    mmd = MMD(jnp.asarray(target_eval), jnp.asarray(expected_target), kernel="rbf", is_latent=True)
+    wasserstein_distance = wasserstein_distance_subsampled(np.asarray(expected_target), np.asarray(target_eval))
 
-    # wasserstein_distance= 0
     return mmd, wasserstein_distance
 
 
@@ -225,7 +216,7 @@ def run_evaluation():
                 continue
 
             for source_label, target_label in tqdm(
-                combinations(LABELS, 2), f"evaluating numbers for gamma {gamma_val} and model {model_name}"
+                permutations(LABELS, 2), f"evaluating numbers for gamma {gamma_val} and model {model_name}"
             ):
                 label_key = f"source_{source_label}_target_{target_label}"
 
@@ -241,7 +232,7 @@ def run_evaluation():
                 save_dir = f"data/{model_name}/{gamma_val}/{label_key}"
 
                 # Image space metrics assessment
-                mmd_img, classifier_conf_img, wasserstein_distance_img = evaluate_by_model_in_image_space(
+                mmd_img, classifier_conf_img = evaluate_by_model_in_image_space(
                     sinkhorn_data=sinkhorn_data, target_label=target_label, save_dir=save_dir
                 )
                 # fid_img =
@@ -260,7 +251,7 @@ def run_evaluation():
                         "mmd_image": mmd_img,
                         "classifier_confidence_image": classifier_conf_img,
                         # "fid_image": fid_img,
-                        "wasserstein_distance": wasserstein_distance_img,
+              
                         "entropy": entropy,
                         "running_time": sinkhorn_data["running_time"],
                         "iter_count": sinkhorn_data["iter_count"],

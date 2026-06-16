@@ -1020,8 +1020,128 @@ def plot_boxplot_time_iteration_per_latent_dim(summary_df, save_dir="figures/box
     print(f"Figure saved to: {save_path}")
     
 
+def plot_barycentric_blurring_effect(summary_df, save_dir="figures/plots", save=True):
+    """Three-panel figure illustrating how large γ causes the barycentric projection
+    to collapse toward the target-class centroid.
+
+    The barycentric projection maps each source point to the weighted average of all
+    target points under the transport plan:  ŷ_i = Σ_j P_{ij} y_j / Σ_j P_{ij}.
+    At large γ the plan becomes uniform, so every source point is sent to
+    approximately the same centroid — a blurry average of the target class.
+
+    Panel A — Transport plan entropy H(P) = −Σ P_{ij} log P_{ij} vs γ.
+              Entropy rises monotonically with γ, directly quantifying how diffuse
+              (blurred) the mapping has become.
+
+    Panel B — Classifier confidence on transported images vs γ.
+              Even a degenerate, centroid-like image can score high on a classifier,
+              making the metric misleadingly optimistic at large γ.
+
+    Panel C — Entropy vs classifier confidence scatter, coloured by γ.
+              Confirms the direct link: high γ → high entropy → inflated confidence.
+
+    Args:
+        summary_df: DataFrame with columns latent_dim, gamma, entropy,
+                    classifier_confidence_image (output of run_evaluation).
+        save_dir:   Directory to write the figure.
+        save:       Whether to save the figure to disk.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    gammas = sorted(summary_df["gamma"].unique())
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+    gamma_colors = plt.cm.plasma(np.linspace(0.1, 0.85, len(gammas)))
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig.suptitle(
+        "Barycentric Blurring Effect: how entropic regularisation degrades the transport map",
+        fontsize=13,
+        y=1.02,
+    )
+
+    def _ci(vals):
+        vals = np.array([float(v) for v in vals])
+        mean = np.mean(vals)
+        ci = 1.96 * np.std(vals, ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0.0
+        return mean, mean - ci, mean + ci
+
+    # ── Panel A: H(P) vs gamma ─────────────────────────────────────────────────
+    ax = axes[0]
+    for dim in latent_dims:
+        means, lowers, uppers = [], [], []
+        for g in gammas:
+            vals = summary_df.loc[
+                (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == g), "entropy"
+            ].values
+            m, lo, hi = _ci(vals)
+            means.append(m); lowers.append(lo); uppers.append(hi)
+        means, lowers, uppers = np.array(means), np.array(lowers), np.array(uppers)
+        ax.plot(gammas, means, marker="o", linewidth=2, label=f"dim={dim}")
+        ax.fill_between(gammas, lowers, uppers, alpha=0.12)
+
+    ax.set_xscale("log")
+    ax.set_xlabel(r"$\gamma$", fontsize=12)
+    ax.set_ylabel(r"Transport plan entropy  $H(P)$", fontsize=11)
+    ax.set_title(
+        "(A)  Plan entropy increases with $\\gamma$\n"
+        r"$\rightarrow$ mapping becomes more diffuse",
+        fontsize=10,
+    )
+    ax.legend(title="Latent dim", fontsize=9, frameon=False)
+
+    # ── Panel B: Classifier confidence vs gamma ────────────────────────────────
+    ax = axes[1]
+    for dim in latent_dims:
+        means, lowers, uppers = [], [], []
+        for g in gammas:
+            vals = summary_df.loc[
+                (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == g),
+                "classifier_confidence_image",
+            ].values
+            m, lo, hi = _ci(vals)
+            means.append(m); lowers.append(lo); uppers.append(hi)
+        means, lowers, uppers = np.array(means), np.array(lowers), np.array(uppers)
+        ax.plot(gammas, means, marker="o", linewidth=2, label=f"dim={dim}")
+        ax.fill_between(gammas, lowers, uppers, alpha=0.12)
+
+    ax.set_xscale("log")
+    ax.set_xlabel(r"$\gamma$", fontsize=12)
+    ax.set_ylabel("Classifier confidence (target class)", fontsize=11)
+    ax.set_title(
+        "(B)  Confidence stays high at large $\\gamma$\n"
+        r"$\rightarrow$ blurred centroid fools the metric",
+        fontsize=10,
+    )
+    ax.legend(title="Latent dim", fontsize=9, frameon=False)
+
+    # ── Panel C: Entropy vs classifier confidence scatter coloured by gamma ────
+    ax = axes[2]
+    for g, color in zip(gammas, gamma_colors):
+        sub = summary_df[summary_df["gamma"] == g]
+        entropies = np.array([float(v) for v in sub["entropy"].values])
+        confs = np.array([float(v) for v in sub["classifier_confidence_image"].values])
+        ax.scatter(entropies, confs, color=color, alpha=0.5, s=18, label=f"$\\gamma$={g}")
+
+    ax.set_xlabel(r"Transport plan entropy  $H(P)$", fontsize=11)
+    ax.set_ylabel("Classifier confidence (target class)", fontsize=11)
+    ax.set_title(
+        "(C)  High entropy correlates with high confidence\n"
+        r"$\rightarrow$ degenerate plans inflate the metric",
+        fontsize=10,
+    )
+    ax.legend(title=r"$\gamma$", fontsize=9, frameon=False, markerscale=1.8)
+
+    plt.tight_layout()
+    if save:
+        path = os.path.join(save_dir, "barycentric_blurring_effect.png")
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        print(f"Saved → {path}")
+    plt.show()
+
+
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
+    plot_barycentric_blurring_effect(summary_df=summary_df)
     plot_boxplot_time_iteration_per_latent_dim_log(summary_df=summary_df)
     # figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
     # plot_interpolation_paths_across_dims(source_label=5,target_label=7)

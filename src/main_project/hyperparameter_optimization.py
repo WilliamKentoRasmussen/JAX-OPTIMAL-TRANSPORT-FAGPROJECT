@@ -14,7 +14,6 @@ import pandas as pd
 from main_project.model import AEv2
 from main_project.data import getData, getDataloader
 from main_project.trainnew import AETrainer
-from main_project.evaluate import MMD, classifier_confidence, evaluate_latent_space_knn
 from main_project.environment import INTERMEDIATE_FRACTIONS, MODELS_DIM
 from main_project.utils import save_with_hyperparams
 import os

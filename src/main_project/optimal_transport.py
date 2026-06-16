@@ -95,7 +95,7 @@ def save_sinkhorn_transformation(model_name, gamma=1e-3, source_label=0, target_
     model = load_with_hyperparams(name=model_name, path="models")
 
     t0 = time.perf_counter()
-    latent_source, latent_target, P, u, v, iter_count, running_time = run_sinkhorn_by_model(
+    latent_source, latent_target, latent_target_eval, P, _, _, iter_count, running_time = run_sinkhorn_by_model(
         model, gamma=gamma, source_label=source_label, target_label=target_label
     )
     t1 = time.perf_counter()
@@ -118,6 +118,8 @@ def save_sinkhorn_transformation(model_name, gamma=1e-3, source_label=0, target_
     sinhorn_trajectory["iter_count"] = iter_count
     sinhorn_trajectory["P"] = P
     sinhorn_trajectory["running_time"] = running_time
+    # Held-out target latents — never seen by Sinkhorn, used for out-of-sample MMD
+    sinhorn_trajectory["target_eval"] = np.array(latent_target_eval)
 
     return iter_count, sinhorn_trajectory
 
