@@ -165,7 +165,6 @@ def save_transformations():
                 model_transport_data[gamma_val] = {}
 
             for (source_label, target_label) in combinations(LABELS, 2):
-                if(VERBOSE_OPTIMAL_TRANSPORT): print(f"\n--- source = {source_label} and target = {target_label} ---") 
                 start = time.perf_counter()
                 
                 iter_count, sinhorn_trajectory = save_sinkhorn_transformation(

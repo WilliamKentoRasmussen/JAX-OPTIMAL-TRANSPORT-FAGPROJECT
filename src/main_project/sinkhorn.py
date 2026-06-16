@@ -17,11 +17,7 @@ import time
 from main_project.model import AEv2
 from main_project.utils import load
 from main_project.data import getData, getDataloader
-from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION, TQDM_SINKHORN,VERBOSE_OPTIMAL_TRANSPORT
-
-
-gamma = 1e-3
-stop_threshold = 1e-5
+from main_project.environment import GAMMA, MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, MAX_ITERATION, TQDM_SINKHORN,VERBOSE_OPTIMAL_TRANSPORT,STOP_THRESHOLD
 
 
 @jax.jit
@@ -100,7 +96,7 @@ def sinkhorn_simple(
     return P, u, v
 
 
-def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000, stop_thresh=1e-7, verbose=False):
+def sinkhorn_log(s, d, C, gamma=0.1, max_iters=MAX_ITERATION, stop_thresh=STOP_THRESHOLD, verbose=True):
     log_s = jnp.log(s)
     log_d = jnp.log(d)
     u = jnp.zeros_like(s)
@@ -113,8 +109,8 @@ def sinkhorn_log(s, d, C, gamma=0.1, max_iters=1000, stop_thresh=1e-7, verbose=F
         u = gamma * (log_s - jax.nn.logsumexp((v[None, :] - C) / gamma, axis=1))
         v = gamma * (log_d - jax.nn.logsumexp((u[:, None] - C) / gamma, axis=0))
 
-        if (jnp.max(jnp.abs(u_prev - u)) < stop_thresh and
-            jnp.max(jnp.abs(v_prev - v)) < stop_thresh):
+        if (jnp.max(jnp.abs(u_prev - u) / (jnp.abs(u) + 1e-8)) < stop_thresh and
+            jnp.max(jnp.abs(v_prev - v) / (jnp.abs(v) + 1e-8)) < stop_thresh):
             if verbose:
                 print(f"Converged at iteration {iter}")
             break
@@ -173,7 +169,7 @@ def run_sinkhorn_by_model(model, gamma,distance_metric="euclidean", source_label
 
     # Now uniform weights work fine — equal n and m
     P, u, v, iter = sinkhorn_log(
-        C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=stop_threshold, verbose=True
+        C=C, s=s, d=d, gamma=gamma, max_iters=MAX_ITERATION, stop_thresh=STOP_THRESHOLD, verbose=VERBOSE_OPTIMAL_TRANSPORT
     )
 
     # print(f"Sinkhorn converged in {iter} iterations with gamma={gamma} and threshold={stop_threshold}")

@@ -11,8 +11,8 @@ def getData():
     return training_data, test_data
 
 
-def getDataloader(data) -> DataLoader:
-    dataloader = DataLoader(data, batch_size=64, shuffle=True)
+def getDataloader(data, batch_size=64) -> DataLoader:
+    dataloader = DataLoader(data, batch_size=batch_size, shuffle=True)
     return dataloader
 
 
