@@ -700,39 +700,6 @@ def plot_interpolation_paths_across_dims(
 
     plt.show()
 
-
-if __name__ == "__main__":
-
-    # summary_df = pd.read_csv("data/evaluation_summary.csv")
-
-    # plot_gamma_vs_mmd(summary_df)
-    # plot_latent_dim_vs_average_mmd(summary_df)
-    # plot_mmd_heatmaps_individual(summary_df=summary_df, gamma=0.1, save=True)
-
-    # training_data, _ = getData()
-
-    # xs, ys = [], []
-    # for img, label in training_data:
-    #     xs.append(img.numpy())
-    #     ys.append(label)
-    # x_full = jnp.array(xs).reshape(len(xs), -1)
-    # labels_full = np.array(ys)
-    # n = len(x_full)
-    # idx = np.random.choice(n, size=min(20000, n), replace=False)
-    # x_sub = x_full[idx]
-    # labels_sub = labels_full[idx]
-
-    # for dim in [2, 8, 10, 16, 32]:
-    #     model = load_with_hyperparams(f"ae_best_model_bo_{dim}")
-    #     plot_latent_space_dim(model, dim, x_sub, labels_sub, save=True, save_dir="figures/plots")
-
-    plot_interpolation_paths_across_dims(source_label=5,target_label=7)
-
-
-        if save:
-            plt.savefig(f"{save_dir}/mmd_image_heatmap_full_dim_{latent_dim}.png", dpi=300)
-        plt.close()
-
 def evaluate_KNN_lantent_quality(model_name="ae_best_model_bo_2", number_neighbors = 5):
     training_data, test_data = getData()
 
@@ -823,14 +790,39 @@ def plot_reconstruction_for_all_dim(save = False):
         plt.savefig("figures/all_dim_reconstruction.png", dpi=150, bbox_inches="tight")
     plt.show()
 
+
+    
+
+    
+
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
     figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    plot_interpolation_paths_across_dims(source_label=5,target_label=7)
     # plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
     # training_data, test_data = getData()
     # loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
     # model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
-    # plot_training_loss(loss_data)
-    # plot_reconstruction(training_data, model)
-    # plot_latent_clusters(training_data, model)
-    # pca_visualize_for_high_dimension(training_data, model)
+
+
+
+    # plot_gamma_vs_mmd(summary_df)
+    # plot_latent_dim_vs_average_mmd(summary_df)
+    # plot_mmd_heatmaps_individual(summary_df=summary_df, gamma=0.1, save=True)
+
+    # training_data, _ = getData()
+
+    # xs, ys = [], []
+    # for img, label in training_data:
+    #     xs.append(img.numpy())
+    #     ys.append(label)
+    # x_full = jnp.array(xs).reshape(len(xs), -1)
+    # labels_full = np.array(ys)
+    # n = len(x_full)
+    # idx = np.random.choice(n, size=min(20000, n), replace=False)
+    # x_sub = x_full[idx]
+    # labels_sub = labels_full[idx]
+
+    # for dim in [2, 8, 10, 16, 32]:
+    #     model = load_with_hyperparams(f"ae_best_model_bo_{dim}")
+    #     plot_latent_space_dim(model, dim, x_sub, labels_sub, save=True, save_dir="figures/plots")
