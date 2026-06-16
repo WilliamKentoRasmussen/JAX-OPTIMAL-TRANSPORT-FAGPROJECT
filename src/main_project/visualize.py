@@ -477,7 +477,7 @@ def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/
                 if not np.isnan(val):
                     ax_lat.text(j, i, f"{val:.4f}", ha="center", va="center", fontsize=7)
 
-        fig.suptitle(f"MMD Heatmaps — Latent Dim = {latent_dim}  (γ = {gamma})", fontsize=14)
+        fig.suptitle(f"MMD Heatmaps — Latent Dim = {latent_dim}  (γ = {OPTIMAL_GAMMA})", fontsize=14)
         plt.tight_layout()
         if save:
             plt.savefig(f"{save_dir}/mmd_heatmap_combined_dim_{latent_dim}.png", dpi=300, bbox_inches="tight")
@@ -1202,7 +1202,7 @@ def fig_1_plot_boxplot_mmd_per_gamma(summary_df, save_dir="figures/boxplots"):
 
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
-    fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
+    #fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
     fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
     fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
     fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)

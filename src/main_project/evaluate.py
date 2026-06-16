@@ -77,7 +77,9 @@ def MMD(x: Array, y: Array, kernel):
     dyy = ry.T + ry - 2.0 * yy
     dxy = rx.T + ry - 2.0 * zz
 
-    XX, YY, XY = (jnp.zeros_like(xx), jnp.zeros_like(xx), jnp.zeros_like(xx))
+    XX = jnp.zeros_like(dxx)
+    YY = jnp.zeros_like(dyy)
+    XY = jnp.zeros_like(dxy)
 
     if kernel == "rbf":
         
@@ -91,7 +93,8 @@ def MMD(x: Array, y: Array, kernel):
             XY += jnp.exp(-0.5 * dxy / a)
 
     # MMD² = E[k(x,x')] + E[k(y,y')] − 2·E[k(x,y)]
-    return jnp.mean(XX + YY - 2.0 * XY)
+    #return jnp.mean(XX + YY - 2.0 * XY)
+    return jnp.mean(XX) + jnp.mean(YY) - 2.0 * jnp.mean(XY)
 
 
 classifier = load(name="evaluate_classifier", path="models", model=targetClassifier(subkey))
@@ -122,6 +125,8 @@ columns = ["Fraction of transport", "MMD", "Confidence of Classifier", "FID"]
 
 def evaluate_by_model_in_image_space(sinkhorn_data, target_label, save_dir):
     target_img = jnp.asarray(sinkhorn_data["target_images"])
+
+    #target_img = jnp.asarray(decode(sinkhorn_data["target_eval"]))
     expected_target_img = jnp.asarray(sinkhorn_data["expected_target_images"])
 
     if "intermediate_images" in sinkhorn_data:
@@ -159,7 +164,7 @@ def evaluate_by_model_in_latent_space(sinkhorn_data):
     # the plan is optimised to match those exact points.
     target_eval = sinkhorn_data["target_eval"]
     expected_target = sinkhorn_data["expected_target"]
-    print(expected_target.shape)
+   
 
     mmd = MMD(jnp.asarray(target_eval), jnp.asarray(expected_target), kernel="rbf")
     wasserstein_distance = wasserstein_distance_subsampled(np.asarray(expected_target), np.asarray(target_eval))

@@ -27,6 +27,7 @@ from main_project.environment import (
     LABELS,
     SAVE_INTERMEDIATE,
     VERBOSE_OPTIMAL_TRANSPORT,
+    OPTIMAL_GAMMA
 )
 
 from main_project.sinkhorn import (
@@ -40,12 +41,12 @@ from main_project.sinkhorn import (
 from main_project.schrodinger_bridge import SchrodingerBridge, density_weights, run_sb
 
 stop_threshold = STOP_THRESHOLD
-gamma = 1e-3
+gamma = OPTIMAL_GAMMA
 
 
-def get_trajectory(source, target, P, decoder=None):
+def get_trajectory(source, target, target_eval, P, decoder=None):
     decode = decoder if decoder is not None else lambda z: z
-    n_points = min(MAX_POINTS, len(source))
+    n_points = min(MAX_POINTS, len(target_eval))
 
     source_images = []
     target_images = []
@@ -59,7 +60,10 @@ def get_trajectory(source, target, P, decoder=None):
     for i in range(n_points):
         p_y_given_x = get_probability_y_given_x(P, i)
         x_star = jnp.array(source[i].squeeze())
-        y_point = jnp.array(target[i].squeeze())
+        #y_point = jnp.array(target[i].squeeze())
+        y_point = jnp.array(target_eval[i].squeeze())
+
+        #barycentric
         expected_target = jnp.array((p_y_given_x @ target).squeeze())
 
         expected_target_latent.append(expected_target)
@@ -103,6 +107,7 @@ def save_sinkhorn_transformation(model_name, gamma=1e-3, source_label=0, target_
     trajectory = get_trajectory(
         latent_source,
         latent_target,
+        latent_target_eval,
         P=P,
         decoder=model.decoder,
     )
