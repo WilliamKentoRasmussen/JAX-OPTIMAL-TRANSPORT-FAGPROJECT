@@ -23,7 +23,26 @@ from main_project.data import getData
 import os
 
 labels_map = {i: str(i) for i in range(10)}
+# style.py
+import matplotlib.pyplot as plt
 
+def apply():
+    plt.rcParams.update({
+        "font.family":      "serif",
+        "font.size":        11,
+        "axes.titlesize":   12,
+        "axes.labelsize":   11,
+        "xtick.labelsize":  10,
+        "ytick.labelsize":  10,
+        "axes.spines.top":  False,
+        "axes.spines.right": False,
+        "axes.grid":        True,
+        "grid.linestyle":   "--",
+        "grid.alpha":       0.4,
+        "figure.dpi":       150,
+    })
+
+apply()
 
 def plot_transport_images(original_images, expected_target_images, n=5, title="Transport plot"):
     fig, axes = plt.subplots(2, n, figsize=(2 * n, 4))
@@ -794,8 +813,117 @@ def plot_reconstruction_for_all_dim(save = False):
     plt.show()
 
 
+import matplotlib.ticker as ticker
 
-def plot_boxplot_time_iteration_per_latent_dim(summary_df, save_dir="figures/plots"):
+import os
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
+
+
+def plot_boxplot_time_iteration_per_latent_dim_log(summary_df, save_dir="figures/boxplots"):
+    """
+    Plot boxplots of running time and iteration count per latent dimension.
+
+    Parameters
+    ----------
+    summary_df : pd.DataFrame
+        DataFrame with columns: 'latent_dim', 'running_time', 'iter_count'.
+    save_dir : str
+        Directory to save the figure.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+    distributions = {"running_time": [], "iter_count": []}
+
+    for dim in latent_dims:
+        mask = summary_df["latent_dim"] == dim
+        distributions["running_time"].append(
+            summary_df.loc[mask, "running_time"].values
+        )
+        distributions["iter_count"].append(
+            summary_df.loc[mask, "iter_count"].values
+        )
+
+
+
+    FLIER_PROPS = dict(marker="o", markerfacecolor="none",
+                       markeredgecolor="#555", markersize=4, linestyle="none")
+    BOX_PROPS   = dict(facecolor="#d9e8f5", color="#2c5f8a")
+    MEDIAN_PROPS = dict(color="#c0392b", linewidth=1.8)
+    WHISKER_PROPS = dict(color="#2c5f8a", linewidth=1.2)
+    CAP_PROPS    = dict(color="#2c5f8a", linewidth=1.2)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.subplots_adjust(wspace=0.35)
+
+    tick_labels = [str(d) for d in latent_dims]
+
+    # --- Panel A: Running Time -------------------------------------------
+    ax = axes[0]
+    bp = ax.boxplot(
+        distributions["running_time"],
+        patch_artist=True,
+        flierprops=FLIER_PROPS,
+        boxprops=BOX_PROPS,
+        medianprops=MEDIAN_PROPS,
+        whiskerprops=WHISKER_PROPS,
+        capprops=CAP_PROPS,
+    )
+    ax.set_yscale("log")
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(
+        lambda v, _: f"{v:g}" if v >= 1 else f"{v:.2f}"
+    ))
+    ax.yaxis.set_minor_formatter(ticker.NullFormatter())
+    ax.set_xticks(range(1, len(latent_dims) + 1))
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel("Latent dimension $d$")
+    ax.set_ylabel("Running time (s) — log scale")
+    ax.set_title("(A) Running time per latent dimension")
+
+    # --- Panel B: Iteration Count ----------------------------------------
+    ax = axes[1]
+    bp2 = ax.boxplot(
+        distributions["iter_count"],
+        patch_artist=True,
+        flierprops=FLIER_PROPS,
+        boxprops=BOX_PROPS,
+        medianprops=MEDIAN_PROPS,
+        whiskerprops=WHISKER_PROPS,
+        capprops=CAP_PROPS,
+    )
+    ax.set_yscale("log")
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{v:g}"))
+    ax.yaxis.set_minor_formatter(ticker.NullFormatter())
+    ax.set_xticks(range(1, len(latent_dims) + 1))
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel("Latent dimension $d$")
+    ax.set_ylabel("Iteration count — log scale")
+    ax.set_title("(B) Iteration count per latent dimension")
+
+    # Shared legend element (median line)
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], color="#c0392b", linewidth=1.8, label="Median"),
+        plt.Rectangle((0, 0), 1, 1, facecolor="#d9e8f5",
+                       edgecolor="#2c5f8a", label="IQR (box)"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="lower center",
+        ncol=2,
+        frameon=False,
+        fontsize=10,
+        bbox_to_anchor=(0.5, -0.04),
+    )
+
+    save_path = os.path.join(save_dir, "boxplot_time_iteration_per_latent_dim_log.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Figure saved to: {save_path}")
+
+def plot_boxplot_time_iteration_per_latent_dim(summary_df, save_dir="figures/boxplots"):
     """
     Plot boxplots of running time and iteration count per latent dimension.
  
@@ -820,21 +948,7 @@ def plot_boxplot_time_iteration_per_latent_dim(summary_df, save_dir="figures/plo
             summary_df.loc[mask, "iter_count"].values
         )
  
-    # --- Style -----------------------------------------------------------
-    plt.rcParams.update({
-        "font.family":      "serif",
-        "font.size":        11,
-        "axes.titlesize":   12,
-        "axes.labelsize":   11,
-        "xtick.labelsize":  10,
-        "ytick.labelsize":  10,
-        "axes.spines.top":  False,
-        "axes.spines.right": False,
-        "axes.grid":        True,
-        "grid.linestyle":   "--",
-        "grid.alpha":       0.4,
-        "figure.dpi":       150,
-    })
+
  
     FLIER_PROPS = dict(marker="o", markerfacecolor="none",
                        markeredgecolor="#555", markersize=4, linestyle="none")
@@ -908,7 +1022,7 @@ def plot_boxplot_time_iteration_per_latent_dim(summary_df, save_dir="figures/plo
 
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
-    plot_boxplot_time_iteration_per_latent_dim(summary_df=summary_df)
+    plot_boxplot_time_iteration_per_latent_dim_log(summary_df=summary_df)
     # figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
     # plot_interpolation_paths_across_dims(source_label=5,target_label=7)
     # plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
