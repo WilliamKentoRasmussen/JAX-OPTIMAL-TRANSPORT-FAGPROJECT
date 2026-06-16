@@ -75,8 +75,8 @@ class AETrainer:
             num_batches += 1
         return total_loss / num_batches
 
-    def train(self, epochs=20, val_split=0.2, model=AEv2(key=jr.PRNGKey(0)), model_name="ae_best_model"):
-        # Load data
+    def train(self, epochs=20, val_split=0.2, model=AEv2(key=jr.PRNGKey(0)), model_name="ae_best_model",
+              patience=20, batch_size=64):
         training_data, test_data = getData()
         print(f"training data is {type(training_data)}")
         num_train = len(training_data)
@@ -87,14 +87,18 @@ class AETrainer:
         train_subset = Subset(training_data, train_idx)
         val_subset = Subset(training_data, val_idx)
 
-        train_loader = getDataloader(train_subset)
-        val_loader = getDataloader(val_subset)
-        test_loader = getDataloader(test_data)
+        train_loader = getDataloader(train_subset, batch_size=batch_size)
+        val_loader = getDataloader(val_subset, batch_size=batch_size)
+        test_loader = getDataloader(test_data, batch_size=batch_size)
 
         # Initialize model and optimizer
         opt_state = self.optimizer.init(eqx.filter(model, eqx.is_array))
 
         history = []  # store all epoch info
+
+        best_val_loss = float("inf")
+        best_model = model
+        epochs_without_improvement = 0
 
         for epoch in range(epochs):
             # --- Training ---
@@ -124,7 +128,18 @@ class AETrainer:
 
             print(f"Epoch {epoch+1}/{epochs} - train_loss: {avg_train_loss:.4f}, val_loss: {avg_val_loss:.4f}")
 
-            # --- Save best model ---
+            # --- Early stopping ---
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                best_model = model
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= patience:
+                    print(f"Early stopping at epoch {epoch+1} (no improvement for {patience} epochs)")
+                    break
+
+        model = best_model
 
         # --- Evaluate on test set ---
         test_loss = self.evaluate(model, test_loader)
