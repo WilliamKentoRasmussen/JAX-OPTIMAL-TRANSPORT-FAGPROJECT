@@ -39,7 +39,6 @@ arch_presets = {
         "large4": [512, 512, 512, 512, 256],
     }
 
-def objective(trial, latent_dim=2):
 
 def objective(trial, latent_dim=2):
     arch_name = trial.suggest_categorical(
