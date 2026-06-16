@@ -89,11 +89,9 @@ def MMD(x: Array, y: Array, kernel, is_latent=False):
     XX, YY, XY = (jnp.zeros_like(xx), jnp.zeros_like(xx), jnp.zeros_like(xx))
 
     if kernel == "rbf":
-        if is_latent:
-            bandwidth_range = [10, 15, 20, 50]
-        else:
-            med = median_bandwidth(x, y)  # Skriv hvorfor i teori
-            bandwidth_range = [0.5 * med, med, 2 * med, 4 * med]
+        
+        med = median_bandwidth(x, y)  # Skriv hvorfor i teori
+        bandwidth_range = [0.5 * med, med, 2 * med, 4 * med]
 
             #
         for a in bandwidth_range:
