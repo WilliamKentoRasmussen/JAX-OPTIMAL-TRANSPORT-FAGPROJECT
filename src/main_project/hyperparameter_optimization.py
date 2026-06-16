@@ -18,7 +18,7 @@ from main_project.evaluate import MMD, classifier_confidence, evaluate_latent_sp
 from main_project.environment import INTERMEDIATE_FRACTIONS, MODELS_DIM
 from main_project.utils import save_with_hyperparams
 import os
-#https://medium.com/@vikakbary/the-first-step-to-optuna-understanding-766e50488c67
+# https://medium.com/@vikakbary/the-first-step-to-optuna-understanding-766e50488c67
 
 if os.path.exists("ae_bo.db"):
     os.remove("ae_bo.db")
@@ -42,6 +42,7 @@ arch_presets = {
 
 def objective(trial, latent_dim=2):
 
+def objective(trial, latent_dim=2):
     arch_name = trial.suggest_categorical(
         "arch", ["small2", "small", "medium", "large", "large2", "medium2", "large3", "large4"]
     )
@@ -70,7 +71,7 @@ def objective(trial, latent_dim=2):
 
     trial.set_user_attr("val_loss", float(val_loss))
 
-    return val_loss 
+    return val_loss
 
 
 def hyperparameter_optimization():

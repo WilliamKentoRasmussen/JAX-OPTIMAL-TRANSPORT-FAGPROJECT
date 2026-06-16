@@ -12,11 +12,16 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.decomposition import PCA
 from main_project.utils import load_with_hyperparams
 from scipy import stats
+from sklearn.neighbors import KNeighborsClassifier
+
+from main_project.utils import load, load_with_hyperparams
+from main_project.data import getData  # fixed
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
 from main_project.environment import LABELS
 from main_project.data import getData
 import os
+
 labels_map = {i: str(i) for i in range(10)}
 
 
@@ -181,15 +186,36 @@ def plot_training_loss(data):
     plt.grid(True)
     plt.show()
 
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_gamma_vs_mmd(summary_df,
-                      save_dir="figures/plots"):
+def figure_3_dim_vs_gamma_metrics_table(summary_df):
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+    gammas = sorted(summary_df["gamma"].unique())
+
+    rows = []
+    for dim in latent_dims:
+        row = {}
+        for gamma in gammas:
+            mask = (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == gamma)
+            mmd = summary_df.loc[mask, "mmd_image"].mean()
+            wasserstein = summary_df.loc[mask, "wasserstein_distance"].mean()
+            conf = summary_df.loc[mask, "classifier_confidence_image"].mean()
+            row[gamma] = f"MMD: {mmd:.4f}, W-Dist: {wasserstein:.4f}, Conf: {conf:.4f}"
+        rows.append(row)
+
+    figure_3_df = pd.DataFrame(data=rows, index=latent_dims)
+    figure_3_df.index.name = "latent_dim"
+
+    print(figure_3_df.to_latex())
+    figure_3_df.to_csv("data/figure_3.csv")
+    return figure_3_df
 
 
+def plot_gamma_vs_mmd(summary_df, save_dir="figures/plots"):
     os.makedirs(save_dir, exist_ok=True)
 
     latent_dims = sorted(summary_df["latent_dim"].unique())
@@ -198,17 +224,13 @@ def plot_gamma_vs_mmd(summary_df,
     fig, ax = plt.subplots(figsize=(8, 5))
 
     for dim in latent_dims:
-
         means = []
         lowers = []
         uppers = []
 
         for gamma in gammas:
-
             values = summary_df.loc[
-                (summary_df["latent_dim"] == dim)
-                & (summary_df["gamma"] == gamma),
-                "mmd_image"
+                (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == gamma), "mmd_image"
             ].values
 
             if len(values) == 0:
@@ -233,20 +255,9 @@ def plot_gamma_vs_mmd(summary_df,
         lowers = np.array(lowers)
         uppers = np.array(uppers)
 
-        ax.plot(
-            gammas,
-            means,
-            marker="o",
-            linewidth=2,
-            label=f"dim={dim}"
-        )
+        ax.plot(gammas, means, marker="o", linewidth=2, label=f"dim={dim}")
 
-        ax.fill_between(
-            gammas,
-            lowers,
-            uppers,
-            alpha=0.15
-        )
+        ax.fill_between(gammas, lowers, uppers, alpha=0.15)
 
     ax.set_xlabel(r"$\gamma$")
     ax.set_ylabel("Average MMD Image")
@@ -258,17 +269,12 @@ def plot_gamma_vs_mmd(summary_df,
     ax.legend(title="Latent Dim", bbox_to_anchor=(1.02, 1))
     plt.tight_layout()
 
-    plt.savefig(
-        f"{save_dir}/gamma_vs_mmd.png",
-        dpi=300,
-        bbox_inches="tight"
-    )
+    plt.savefig(f"{save_dir}/gamma_vs_mmd.png", dpi=300, bbox_inches="tight")
 
     plt.show()
 
-def plot_latent_dim_vs_average_mmd(summary_df,
-                                   save_dir="figures/plots"):
 
+def plot_latent_dim_vs_average_mmd(summary_df, save_dir="figures/plots"):
     os.makedirs(save_dir, exist_ok=True)
 
     latent_dims = sorted(summary_df["latent_dim"].unique())
@@ -278,11 +284,7 @@ def plot_latent_dim_vs_average_mmd(summary_df,
     upper = []
 
     for dim in latent_dims:
-
-        values = summary_df.loc[
-            summary_df["latent_dim"] == dim,
-            "mmd_image"
-        ].values
+        values = summary_df.loc[summary_df["latent_dim"] == dim, "mmd_image"].values
 
         mean = np.mean(values)
         std = np.std(values, ddof=1)
@@ -302,21 +304,9 @@ def plot_latent_dim_vs_average_mmd(summary_df,
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    ax.plot(
-        latent_dims,
-        means,
-        marker="o",
-        linewidth=2,
-        label="Mean MMD"
-    )
+    ax.plot(latent_dims, means, marker="o", linewidth=2, label="Mean MMD")
 
-    ax.fill_between(
-        latent_dims,
-        lower,
-        upper,
-        alpha=0.25,
-        label="95% CI"
-    )
+    ax.fill_between(latent_dims, lower, upper, alpha=0.25, label="95% CI")
 
     ax.set_xlabel("Latent Dimension")
     ax.set_ylabel("Average MMD Image")
@@ -327,16 +317,12 @@ def plot_latent_dim_vs_average_mmd(summary_df,
 
     plt.tight_layout()
 
-    plt.savefig(
-        f"{save_dir}/latent_dim_vs_average_mmd.png",
-        dpi=300,
-        bbox_inches="tight"
-    )
+    plt.savefig(f"{save_dir}/latent_dim_vs_average_mmd.png", dpi=300, bbox_inches="tight")
 
     plt.show()
 
-def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatmaps"):
 
+def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatmaps"):
     os.makedirs(save_dir, exist_ok=True)
 
     labels = LABELS
@@ -743,3 +729,108 @@ if __name__ == "__main__":
     plot_interpolation_paths_across_dims(source_label=5,target_label=7)
 
 
+        if save:
+            plt.savefig(f"{save_dir}/mmd_image_heatmap_full_dim_{latent_dim}.png", dpi=300)
+        plt.close()
+
+def evaluate_KNN_lantent_quality(model_name="ae_best_model_bo_2", number_neighbors = 5):
+    training_data, test_data = getData()
+
+    x_train = jnp.array(training_data.data.numpy()).reshape(-1, 784) / 255.0 
+    y_train = jnp.array(training_data.targets.numpy())
+
+    x_test = jnp.array(test_data.data.numpy()).reshape(-1, 784) / 255.0 
+    y_test = jnp.array(test_data.targets.numpy())
+
+    model = load_with_hyperparams(name=model_name, path="models")
+    _, z_train = jax.vmap(model)(x_train)
+    _, z_test = jax.vmap(model)(x_test)
+
+    z_train = np.array(z_train)
+    z_test = np.array(z_test)
+
+    neigh = KNeighborsClassifier(n_neighbors=number_neighbors)
+    neigh.fit(z_train, y_train)
+
+    score = neigh.score(z_test, y_test)
+    # ADD CI !!! 
+    return score 
+
+def evaluate_test_MSE(model_name="ae_best_model_bo_2"):
+    training_data, test_data = getData()
+
+    x_test = jnp.array(test_data.data.numpy()).reshape(-1, 784) / 255.0 
+
+    model = load_with_hyperparams(name=model_name, path="models")
+
+    x_hat_test, _ = jax.vmap(model)(x_test)
+
+    # Reconstruction MSE with 95% CI via standard error
+    per_sample_mse = np.mean((np.array(x_test) - np.array(x_hat_test)) ** 2, axis=1)
+    mse = np.mean(per_sample_mse)
+    # CI need to bee added !!! 
+    mse_ci = 1.96 * np.std(per_sample_mse) / np.sqrt(len(per_sample_mse))
+    
+    return mse
+
+def plot_reconstruction_for_all_dim(save = False):
+    _, test_data = getData()
+
+    # pick one example per digit class (0-9)
+    class_examples = {}
+    for img, label in test_data:
+        label = int(label)
+        if label not in class_examples:
+            class_examples[label] = img.numpy()
+        if len(class_examples) == 10:
+            break
+    labels = sorted(class_examples.keys())
+    xs = [class_examples[c] for c in labels]
+
+    x = jnp.array(xs).reshape(len(xs), -1)
+    x_img = np.array(x).reshape(-1, 28, 28)
+
+    recons = []
+    for dim in MODELS_DIM:
+        model = load_with_hyperparams(name=f"ae_best_model_bo_{dim}", path="models")
+        recon, _ = jax.vmap(model)(x)
+        recons.append(np.array(recon).reshape(-1, 28, 28))
+
+    def hide_ticks(ax):
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+    n_cols = len(labels)
+    n_rows = 1 + len(MODELS_DIM)
+    _, axes = plt.subplots(n_rows, n_cols, figsize=(1.5 * n_cols, 1.5 * n_rows))
+
+    for i, label in enumerate(labels):
+        axes[0, i].imshow(x_img[i], cmap="gray")
+        hide_ticks(axes[0, i])
+        # axes[0, i].set_title(f"class {label}", fontsize=8)
+    axes[0, 0].set_ylabel("Original", fontsize=10)
+
+    for row, (dim, recon) in enumerate(zip(MODELS_DIM, recons), start=1):
+        for i in range(n_cols):
+            axes[row, i].imshow(recon[i], cmap="gray")
+            hide_ticks(axes[row, i])
+        axes[row, 0].set_ylabel(f"dim={dim}", fontsize=10)
+
+    plt.tight_layout()
+    if save: 
+        plt.savefig("figures/all_dim_reconstruction.png", dpi=150, bbox_inches="tight")
+    plt.show()
+
+if __name__ == "__main__":
+    summary_df = pd.read_csv("data/evaluation_summary.csv")
+    figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    # plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
+    # training_data, test_data = getData()
+    # loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
+    # model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
+    # plot_training_loss(loss_data)
+    # plot_reconstruction(training_data, model)
+    # plot_latent_clusters(training_data, model)
+    # pca_visualize_for_high_dimension(training_data, model)
