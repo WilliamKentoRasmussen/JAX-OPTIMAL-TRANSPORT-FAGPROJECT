@@ -836,9 +836,9 @@ def plot_boxplot_time_iteration_per_latent_dim_log(summary_df, save_dir="figures
 
     latent_dims = sorted(summary_df["latent_dim"].unique())
     distributions = {"running_time": [], "iter_count": []}
-
+    
     for dim in latent_dims:
-        mask = summary_df["latent_dim"] == dim
+        mask = summary_df["latent_dim"] == dim and summary_df["gamma"] == 0.1
         distributions["running_time"].append(
             summary_df.loc[mask, "running_time"].values
         )
@@ -899,7 +899,7 @@ def plot_boxplot_time_iteration_per_latent_dim_log(summary_df, save_dir="figures
     ax.set_xticks(range(1, len(latent_dims) + 1))
     ax.set_xticklabels(tick_labels)
     ax.set_xlabel("Latent dimension $d$")
-    ax.set_ylabel("Iteration count — log scale")
+    ax.set_ylabel("Iteration count (log scale)")
     ax.set_title("(B) Iteration count per latent dimension")
 
     # Shared legend element (median line)
