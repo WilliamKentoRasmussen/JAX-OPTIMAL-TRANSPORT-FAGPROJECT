@@ -4,8 +4,6 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int, PyTree  # https://github.com/google/jaxtyping
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import cross_val_score
 import pandas as pd
 import pickle
 import os
@@ -14,11 +12,7 @@ from tqdm import tqdm
 
 # example of calculating the frechet inception distance
 import numpy
-from numpy import cov
-from numpy import trace
-from numpy import iscomplexobj
 from numpy.random import random
-from scipy.linalg import sqrtm
 from scipy.stats import wasserstein_distance_nd
 
 
@@ -30,10 +24,7 @@ from scipy.stats import wasserstein_distance_nd
 #     M = ot.dist(x, y)  # cost matrix
 #     return ot.sinkhorn2(a, b, M, reg)
 
-from main_project.train import train_classifier
 from main_project.model import targetClassifier
-from main_project.visualize import plot_mmd_image_heatmaps_full, plot_latent_dim_vs_average_mmd, plot_gamma_vs_mmd
-from main_project.optimal_transport import get_trajectory
 from main_project.utils import load
 from main_project.environment import MODELS_DIM, INTERMEDIATE_FRACTIONS, MAX_POINTS, GAMMA, LABELS
 
@@ -168,8 +159,9 @@ def evaluate_by_model_in_latent_space(sinkhorn_data):
     # the plan is optimised to match those exact points.
     target_eval = sinkhorn_data["target_eval"]
     expected_target = sinkhorn_data["expected_target"]
+    print(expected_target.shape)
 
-    mmd = MMD(jnp.asarray(target_eval), jnp.asarray(expected_target), kernel="rbf", is_latent=True)
+    mmd = MMD(jnp.asarray(target_eval), jnp.asarray(expected_target), kernel="rbf")
     wasserstein_distance = wasserstein_distance_subsampled(np.asarray(expected_target), np.asarray(target_eval))
 
     return mmd, wasserstein_distance
@@ -260,10 +252,6 @@ def run_evaluation():
 
     if summary:
         summary_df = pd.DataFrame(summary)
-
-        plot_gamma_vs_mmd(summary_df)
-        plot_latent_dim_vs_average_mmd(summary_df)
-        plot_mmd_image_heatmaps_full(summary_df)
 
         os.makedirs("data", exist_ok=True)
         summary_df.to_csv("data/evaluation_summary.csv", index=False)

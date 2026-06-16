@@ -18,7 +18,7 @@ from main_project.utils import load, load_with_hyperparams
 from main_project.data import getData  # fixed
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
-from main_project.environment import LABELS, MODELS_DIM
+from main_project.environment import LABELS, MODELS_DIM, OPTIMAL_GAMMA
 from main_project.data import getData
 import os
 
@@ -211,30 +211,30 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def figure_3_dim_vs_gamma_metrics_table(summary_df):
+def fig_2_dim_vs_gamma_metrics_table(summary_df):
     latent_dims = sorted(summary_df["latent_dim"].unique())
-    gammas = sorted(summary_df["gamma"].unique())
+    
+    evaluation_metrics =["entropy", "wasserstein_distance_latent", "mmd_latent", "mmd_image", "classifier_confidence_image", ]
 
     rows = []
     for dim in latent_dims:
-        row = {}
-        for gamma in gammas:
-            mask = (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == gamma)
-            mmd = summary_df.loc[mask, "mmd_image"].mean()
-            wasserstein = summary_df.loc[mask, "wasserstein_distance"].mean()
-            conf = summary_df.loc[mask, "classifier_confidence_image"].mean()
-            row[gamma] = f"MMD: {mmd:.4f}, W-Dist: {wasserstein:.4f}, Conf: {conf:.4f}"
+        row = []
+        for metric in evaluation_metrics:
+
+            mask = (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == OPTIMAL_GAMMA)
+            metric_value = summary_df.loc[mask, metric].mean()
+            row.append(f"{metric_value:.4f}")
         rows.append(row)
 
-    figure_3_df = pd.DataFrame(data=rows, index=latent_dims)
-    figure_3_df.index.name = "latent_dim"
+    figure_3_df = pd.DataFrame(data=rows, columns= ["Entropy Of P", "Latent Wasserstein Distance","Latent MMD" , "Image MMD","Image Classifier Probability"],  index=latent_dims)
+    figure_3_df.index.name = "Latent Dimension"
 
     print(figure_3_df.to_latex())
     figure_3_df.to_csv("data/figure_3.csv")
     return figure_3_df
 
 
-def plot_gamma_vs_mmd(summary_df, save_dir="figures/plots"):
+def fig_4_plot_gamma_vs_mmd(summary_df, save_dir="figures/plots"):
     os.makedirs(save_dir, exist_ok=True)
 
     latent_dims = sorted(summary_df["latent_dim"].unique())
@@ -427,11 +427,11 @@ def plot_mmd_latent_heatmaps_full(summary_df, save=True, save_dir="figures/heatm
             plt.savefig(f"{save_dir}/mmd_latent_heatmap_full_dim_{latent_dim}.png", dpi=300)
         plt.close()
 
-def plot_mmd_heatmaps_individual(summary_df, gamma=0.1, save=True, save_dir="figures/heatmaps"):
+def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/heatmaps"):
     """Per-dim figure: MMD Image (left) + MMD Latent (right) at a fixed gamma, each with its own colorbar."""
     os.makedirs(save_dir, exist_ok=True)
     labels = LABELS
-    df = summary_df[summary_df["gamma"] == gamma]
+    df = summary_df[summary_df["gamma"] == OPTIMAL_GAMMA]
     latent_dims = sorted(df["latent_dim"].unique())
 
     for latent_dim in latent_dims:
@@ -1020,7 +1020,7 @@ def plot_boxplot_time_iteration_per_latent_dim(summary_df, save_dir="figures/box
     print(f"Figure saved to: {save_path}")
     
 
-def plot_barycentric_blurring_effect(summary_df, save_dir="figures/plots", save=True):
+def fig_0_plot_barycentric_blurring_effect(summary_df, save_dir="figures/plots", save=True):
     """Three-panel figure illustrating how large γ causes the barycentric projection
     to collapse toward the target-class centroid.
 
@@ -1139,36 +1139,71 @@ def plot_barycentric_blurring_effect(summary_df, save_dir="figures/plots", save=
     plt.show()
 
 
+from matplotlib.lines import Line2D
+def fig_1_plot_boxplot_mmd_per_gamma(summary_df, save_dir="figures/boxplots"):
+    os.makedirs(save_dir, exist_ok=True)
+
+    gammas = sorted(summary_df["gamma"].unique())
+
+    distributions = []
+    for gamma in gammas:
+        mask = summary_df["gamma"] == gamma
+        distributions.append(
+            summary_df.loc[mask, "mmd_image"].values  # full pipeline MMD
+        )
+
+    FLIER_PROPS   = dict(marker="o", markerfacecolor="none",
+                         markeredgecolor="#555", markersize=4, linestyle="none")
+    BOX_PROPS     = dict(facecolor="#d9e8f5", color="#2c5f8a")
+    MEDIAN_PROPS  = dict(color="#c0392b", linewidth=1.8)
+    WHISKER_PROPS = dict(color="#2c5f8a", linewidth=1.2)
+    CAP_PROPS     = dict(color="#2c5f8a", linewidth=1.2)
+
+    fig = plt.figure(figsize=(10, 7))
+    tick_labels = [str(gamma) for gamma in gammas]
+
+    ax = fig.add_axes([0.1, 0.15, 0.85, 0.75])  # leave room for legend
+
+    bp = ax.boxplot(                   # noqa: F841
+        distributions,                 # ← was distributions["running_time"]
+        patch_artist=True,
+        flierprops=FLIER_PROPS,
+        boxprops=BOX_PROPS,
+        medianprops=MEDIAN_PROPS,
+        whiskerprops=WHISKER_PROPS,
+        capprops=CAP_PROPS,
+    )
+
+    ax.set_xticks(range(1, len(gammas) + 1))
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel("Regularisation $\\gamma$")        # ← was "Latent dimension $d$"
+    ax.set_ylabel("MMD (image space)")               # ← was "Running time (s)"
+    ax.set_title("MMD per $\\gamma$ (image space)")  # ← was Running time title
+    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+
+    legend_elements = [
+        Line2D([0], [0], color="#c0392b", linewidth=1.8, label="Median"),
+        plt.Rectangle((0, 0), 1, 1, facecolor="#d9e8f5",
+                      edgecolor="#2c5f8a", label="IQR (box)"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="lower center",
+        ncol=2,
+        frameon=False,
+        fontsize=10,
+        bbox_to_anchor=(0.5, -0.04),
+    )
+
+    save_path = os.path.join(save_dir, "boxplot_mmd_per_gamma.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Figure saved to: {save_path}")
+
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
-    plot_barycentric_blurring_effect(summary_df=summary_df)
-    plot_boxplot_time_iteration_per_latent_dim_log(summary_df=summary_df)
-    # figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
-    # plot_interpolation_paths_across_dims(source_label=5,target_label=7)
-    # plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
-    # training_data, test_data = getData()
-    # loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
-    # model = load_with_hyperparams(name="ae_best_model_bo_2", path="models")
-
-
-
-    # plot_gamma_vs_mmd(summary_df)
-    # plot_latent_dim_vs_average_mmd(summary_df)
-    # plot_mmd_heatmaps_individual(summary_df=summary_df, gamma=0.1, save=True)
-
-    # training_data, _ = getData()
-
-    # xs, ys = [], []
-    # for img, label in training_data:
-    #     xs.append(img.numpy())
-    #     ys.append(label)
-    # x_full = jnp.array(xs).reshape(len(xs), -1)
-    # labels_full = np.array(ys)
-    # n = len(x_full)
-    # idx = np.random.choice(n, size=min(20000, n), replace=False)
-    # x_sub = x_full[idx]
-    # labels_sub = labels_full[idx]
-
-    # for dim in [2, 8, 10, 16, 32]:
-    #     model = load_with_hyperparams(f"ae_best_model_bo_{dim}")
-    #     plot_latent_space_dim(model, dim, x_sub, labels_sub, save=True, save_dir="figures/plots")
+    fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
+    fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
+    fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
+    fig_4_plot_gamma_vs_mmd(summary_df=summary_df)

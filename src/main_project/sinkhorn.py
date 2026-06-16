@@ -25,7 +25,7 @@ from main_project.environment import (
     MAX_ITERATION,
     TQDM_SINKHORN,
     VERBOSE_OPTIMAL_TRANSPORT,
-    STOP_THRESSHOLD,
+    STOP_THRESHOLD,
 )
 
 
@@ -142,7 +142,7 @@ def timed_sinkhorn(C, s, d, gamma):
         d=d,
         gamma=gamma,
         max_iters=MAX_ITERATION,
-        stop_thresh=STOP_THRESSHOLD,
+        stop_thresh=STOP_THRESHOLD,
         verbose=False
     )
 
