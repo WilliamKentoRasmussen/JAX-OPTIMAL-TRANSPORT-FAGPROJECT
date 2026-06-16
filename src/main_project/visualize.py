@@ -18,7 +18,7 @@ from main_project.utils import load, load_with_hyperparams
 from main_project.data import getData  # fixed
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
-from main_project.environment import LABELS
+from main_project.environment import LABELS, MODELS_DIM
 from main_project.data import getData
 import os
 
@@ -274,6 +274,7 @@ def plot_gamma_vs_mmd(summary_df, save_dir="figures/plots"):
     plt.show()
 
 
+
 def plot_latent_dim_vs_average_mmd(summary_df, save_dir="figures/plots"):
     os.makedirs(save_dir, exist_ok=True)
 
@@ -462,6 +463,8 @@ def plot_mmd_heatmaps_individual(summary_df, gamma=0.1, save=True, save_dir="fig
         if save:
             plt.savefig(f"{save_dir}/mmd_heatmap_combined_dim_{latent_dim}.png", dpi=300, bbox_inches="tight")
         plt.close()
+
+
 
 
 def plot_latent_space_dim(model, dim, x_sub, labels_sub, point_size=4, alpha=0.6, save=True, save_dir="figures/plots"):
@@ -791,14 +794,123 @@ def plot_reconstruction_for_all_dim(save = False):
     plt.show()
 
 
-    
 
+def plot_boxplot_time_iteration_per_latent_dim(summary_df, save_dir="figures/plots"):
+    """
+    Plot boxplots of running time and iteration count per latent dimension.
+ 
+    Parameters
+    ----------
+    summary_df : pd.DataFrame
+        DataFrame with columns: 'latent_dim', 'running_time', 'iter_count'.
+    save_dir : str
+        Directory to save the figure.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+ 
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+    distributions = {"running_time": [], "iter_count": []}
+ 
+    for dim in latent_dims:
+        mask = summary_df["latent_dim"] == dim
+        distributions["running_time"].append(
+            summary_df.loc[mask, "running_time"].values
+        )
+        distributions["iter_count"].append(
+            summary_df.loc[mask, "iter_count"].values
+        )
+ 
+    # --- Style -----------------------------------------------------------
+    plt.rcParams.update({
+        "font.family":      "serif",
+        "font.size":        11,
+        "axes.titlesize":   12,
+        "axes.labelsize":   11,
+        "xtick.labelsize":  10,
+        "ytick.labelsize":  10,
+        "axes.spines.top":  False,
+        "axes.spines.right": False,
+        "axes.grid":        True,
+        "grid.linestyle":   "--",
+        "grid.alpha":       0.4,
+        "figure.dpi":       150,
+    })
+ 
+    FLIER_PROPS = dict(marker="o", markerfacecolor="none",
+                       markeredgecolor="#555", markersize=4, linestyle="none")
+    BOX_PROPS   = dict(facecolor="#d9e8f5", color="#2c5f8a")
+    MEDIAN_PROPS = dict(color="#c0392b", linewidth=1.8)
+    WHISKER_PROPS = dict(color="#2c5f8a", linewidth=1.2)
+    CAP_PROPS    = dict(color="#2c5f8a", linewidth=1.2)
+ 
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.subplots_adjust(wspace=0.35)
+ 
+    tick_labels = [str(d) for d in latent_dims]
+ 
+    # --- Panel A: Running Time -------------------------------------------
+    ax = axes[0]
+    bp = ax.boxplot(
+        distributions["running_time"],
+        patch_artist=True,
+        flierprops=FLIER_PROPS,
+        boxprops=BOX_PROPS,
+        medianprops=MEDIAN_PROPS,
+        whiskerprops=WHISKER_PROPS,
+        capprops=CAP_PROPS,
+    )
+    ax.set_xticks(range(1, len(latent_dims) + 1))
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel("Latent dimension $d$")
+    ax.set_ylabel("Running time (s)")
+    ax.set_title("(A) Running time per latent dimension")
+    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+ 
+    # --- Panel B: Iteration Count ----------------------------------------
+    ax = axes[1]
+    bp2 = ax.boxplot(
+        distributions["iter_count"],
+        patch_artist=True,
+        flierprops=FLIER_PROPS,
+        boxprops=BOX_PROPS,
+        medianprops=MEDIAN_PROPS,
+        whiskerprops=WHISKER_PROPS,
+        capprops=CAP_PROPS,
+    )
+    ax.set_xticks(range(1, len(latent_dims) + 1))
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel("Latent dimension $d$")
+    ax.set_ylabel("Iteration count")
+    ax.set_title("(B) Iteration count per latent dimension")
+    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+ 
+    # Shared legend element (median line)
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], color="#c0392b", linewidth=1.8, label="Median"),
+        plt.Rectangle((0, 0), 1, 1, facecolor="#d9e8f5",
+                       edgecolor="#2c5f8a", label="IQR (box)"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="lower center",
+        ncol=2,
+        frameon=False,
+        fontsize=10,
+        bbox_to_anchor=(0.5, -0.04),
+    )
+ 
+    save_path = os.path.join(save_dir, "boxplot_time_iteration_per_latent_dim.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Figure saved to: {save_path}")
     
 
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
-    figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
-    plot_interpolation_paths_across_dims(source_label=5,target_label=7)
+    plot_boxplot_time_iteration_per_latent_dim(summary_df=summary_df)
+    # figure_3_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    # plot_interpolation_paths_across_dims(source_label=5,target_label=7)
     # plot_mmd_image_heatmaps_full(summary_df=summary_df, save=False)
     # training_data, test_data = getData()
     # loss_data = pd.read_csv("training_history_ae_best_model_bo_2.csv")
