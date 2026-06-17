@@ -88,9 +88,9 @@ def MMD(x: Array, y: Array, kernel):
 
             #
         for a in bandwidth_range:
-            XX += jnp.exp(-0.5 * dxx / a)
-            YY += jnp.exp(-0.5 * dyy / a)
-            XY += jnp.exp(-0.5 * dxy / a)
+            XX += (jnp.exp(-0.5 * dxx / a)) /len(bandwidth_range)
+            YY += (jnp.exp(-0.5 * dyy / a)) /len(bandwidth_range)
+            XY += (jnp.exp(-0.5 * dxy / a))/len(bandwidth_range)
 
     # MMD² = E[k(x,x')] + E[k(y,y')] − 2·E[k(x,y)]
     #return jnp.mean(XX + YY - 2.0 * XY)
@@ -115,6 +115,7 @@ def classifier_confidence(transported_images, target_class=1):
 
 
 def entropy_for_transport_plan(T: jnp.ndarray):
+    T = T / (jnp.sum(T))
     mask = T > 0
     entropy = -jnp.sum(jnp.where(mask, T * jnp.log(T), 0.0))
     return entropy
@@ -172,16 +173,19 @@ def evaluate_by_model_in_latent_space(sinkhorn_data):
     return mmd, wasserstein_distance
 
 
-def wasserstein_distance_subsampled(source_imgs, target_imgs, max_points=200, seed=0):
-    source_imgs = np.asarray(source_imgs)
-    target_imgs = np.asarray(target_imgs)
-
-    n = min(source_imgs.shape[0], target_imgs.shape[0], max_points)
-    rng = np.random.default_rng(seed)
-    idx1 = rng.choice(source_imgs.shape[0], n, replace=False)
-    idx2 = rng.choice(target_imgs.shape[0], n, replace=False)
-
-    return wasserstein_distance_nd(source_imgs[idx1], target_imgs[idx2])
+def wasserstein_distance_subsampled(source, target, max_points=500, n_seeds=5):
+    source = np.asarray(source)
+    target = np.asarray(target)
+    n = min(source.shape[0], target.shape[0], max_points)
+    
+    distances = []
+    for seed in range(n_seeds):
+        rng = np.random.default_rng(seed)
+        idx1 = rng.choice(source.shape[0], n, replace=False)
+        idx2 = rng.choice(target.shape[0], n, replace=False)
+        distances.append(wasserstein_distance_nd(source[idx1], target[idx2]))
+    
+    return float(np.mean(distances))
 
 
 # def wasserstein_distance_subsampled(source_imgs, target_imgs):

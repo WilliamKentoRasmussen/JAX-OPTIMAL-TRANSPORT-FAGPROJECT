@@ -425,8 +425,9 @@ def plot_mmd_latent_heatmaps_full(summary_df, save=True, save_dir="figures/heatm
             plt.savefig(f"{save_dir}/mmd_latent_heatmap_full_dim_{latent_dim}.png", dpi=300)
         plt.close()
 
-def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/figure"):
-    """Per-dim figure: MMD Image (left) + MMD Latent (right) at a fixed gamma, each with its own colorbar."""
+def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/rapport"):
+    """Per-dim figure: MMD Latent (left) + Wasserstein Latent (right) at a fixed gamma,
+    full asymmetric heatmap — all (src→tgt) and (tgt→src) pairs as distinct cells."""
     os.makedirs(save_dir, exist_ok=True)
     labels = LABELS
     df = summary_df[summary_df["gamma"] == OPTIMAL_GAMMA]
@@ -435,52 +436,77 @@ def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/
     for latent_dim in latent_dims:
         model_df = df[df["latent_dim"] == latent_dim]
 
-        img_matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
-        lat_matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
+        mmd_matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
+        wass_matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
 
-        for (src, tgt), val in model_df.groupby(["source_label", "target_label"])["mmd_image"].mean().items():
-            img_matrix.loc[src, tgt] = val
-        for (src, tgt), val in model_df.groupby(["source_label", "target_label"])["mmd_latent"].mean().items():
-            lat_matrix.loc[src, tgt] = val
+        mmd_means = model_df.groupby(["source_label", "target_label"])["mmd_latent"].mean()
+        wass_means = model_df.groupby(["source_label", "target_label"])["wasserstein_distance_latent"].mean()
 
-        fig, (ax_img, ax_lat) = plt.subplots(1, 2, figsize=(16, 7))
+        for (src, tgt), val in mmd_means.items():
+            mmd_matrix.loc[src, tgt] = val
+            # Also fill the reverse direction if not already present in the data
+            if (tgt, src) not in mmd_means.index:
+                mmd_matrix.loc[tgt, src] = val
 
-        im1 = ax_img.imshow(img_matrix, cmap="viridis_r")
-        ax_img.set_xticks(range(len(labels)))
-        ax_img.set_xticklabels(labels)
-        ax_img.set_yticks(range(len(labels)))
-        ax_img.set_yticklabels(labels)
-        ax_img.set_xlabel("Target Label")
-        ax_img.set_ylabel("Source Label")
-        ax_img.set_title(f"MMD Image  |  mean = {model_df['mmd_image'].mean():.3f}")
-        plt.colorbar(im1, ax=ax_img, label="MMD Image")
+        for (src, tgt), val in wass_means.items():
+            wass_matrix.loc[src, tgt] = val
+            if (tgt, src) not in wass_means.index:
+                wass_matrix.loc[tgt, src] = val
+
+        fig, (ax_mmd, ax_wass) = plt.subplots(1, 2, figsize=(18, 8))
+
+        # --- MMD Latent ---
+        mmd_vals = mmd_matrix.values.astype(float)
+        im1 = ax_mmd.imshow(mmd_vals, cmap="viridis_r")
+        ax_mmd.set_xticks(range(len(labels)))
+        ax_mmd.set_xticklabels(labels)
+        ax_mmd.set_yticks(range(len(labels)))
+        ax_mmd.set_yticklabels(labels)
+        ax_mmd.set_xlabel("Target Label")
+        ax_mmd.set_ylabel("Source Label")
+        ax_mmd.set_title(f"MMD Latent  |  mean = {np.nanmean(mmd_vals):.4f}")
+        plt.colorbar(im1, ax=ax_mmd, label="MMD Latent")
+
+        mmd_mean = np.nanmean(mmd_vals)
         for i in range(len(labels)):
             for j in range(len(labels)):
-                val = img_matrix.iloc[i, j]
+                val = mmd_matrix.iloc[i, j]
                 if not np.isnan(val):
-                    ax_img.text(j, i, f"{val:.3f}", ha="center", va="center", fontsize=7)
+                    ax_mmd.text(j, i, f"{val:.4f}", ha="center", va="center",
+                                fontsize=6, color="white" if val > mmd_mean else "black")
 
-        im2 = ax_lat.imshow(lat_matrix, cmap="viridis_r")
-        ax_lat.set_xticks(range(len(labels)))
-        ax_lat.set_xticklabels(labels)
-        ax_lat.set_yticks(range(len(labels)))
-        ax_lat.set_yticklabels(labels)
-        ax_lat.set_xlabel("Target Label")
-        ax_lat.set_ylabel("Source Label")
-        ax_lat.set_title(f"MMD Latent  |  mean = {model_df['mmd_latent'].mean():.4f}")
-        plt.colorbar(im2, ax=ax_lat, label="MMD Latent")
+        # --- Wasserstein Latent ---
+        wass_vals = wass_matrix.values.astype(float)
+        im2 = ax_wass.imshow(wass_vals, cmap="viridis_r")
+        ax_wass.set_xticks(range(len(labels)))
+        ax_wass.set_xticklabels(labels)
+        ax_wass.set_yticks(range(len(labels)))
+        ax_wass.set_yticklabels(labels)
+        ax_wass.set_xlabel("Target Label")
+        ax_wass.set_ylabel("Source Label")
+        ax_wass.set_title(f"Wasserstein Latent  |  mean = {np.nanmean(wass_vals):.4f}")
+        plt.colorbar(im2, ax=ax_wass, label="Wasserstein Distance (Latent)")
+
+        wass_mean = np.nanmean(wass_vals)
         for i in range(len(labels)):
             for j in range(len(labels)):
-                val = lat_matrix.iloc[i, j]
+                val = wass_matrix.iloc[i, j]
                 if not np.isnan(val):
-                    ax_lat.text(j, i, f"{val:.4f}", ha="center", va="center", fontsize=7)
+                    ax_wass.text(j, i, f"{val:.4f}", ha="center", va="center",
+                                 fontsize=6, color="white" if val > wass_mean else "black")
 
-        fig.suptitle(f"MMD Heatmaps — Latent Dim = {latent_dim}  (γ = {OPTIMAL_GAMMA})", fontsize=14)
+        fig.suptitle(
+            f"Latent Space Distance Heatmaps — Latent Dim = {latent_dim}  (γ = {OPTIMAL_GAMMA})",
+            fontsize=14
+        )
         plt.tight_layout()
-        if save:
-            plt.savefig(f"{save_dir}/figure_3_mmd_heatmap_combined_dim_{latent_dim}.png", dpi=300, bbox_inches="tight")
-        plt.close()
 
+        if save:
+            plt.savefig(
+                f"{save_dir}/figure_3_latent_heatmaps_dim_{latent_dim}.png",
+                dpi=300, bbox_inches="tight"
+            )
+        plt.close()
 
 
 
@@ -1214,8 +1240,8 @@ def fig_1_plot_boxplot_mmd_per_gamma(summary_df, save_dir="figures/rapport"):
 
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
-    fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
-    fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
-    fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    #fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
+    #fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
+    #fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
     fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
-    fig_4_plot_gamma_vs_mmd(summary_df=summary_df)
+    #fig_4_plot_gamma_vs_mmd(summary_df=summary_df)
