@@ -99,31 +99,37 @@ def plot_latent_clusters(training_data, model, max_points=20000, point_size=4, a
     plt.tight_layout()
     plt.show()
 
-
 def plot_barycentric_geometry_vs_gamma_dim2(
     training_data,
     model,
     source_label,
     target_label,
-    save_dir="figures/rapport",
+    save_dir="figures/plots",
     save=True,
     point_size=12,
     alpha=0.6,
+    n_highlight=35,         # how many source points to draw transport lines for
+    highlight_size=60,      # marker size for highlighted points
+    background_frac=1.0,    # fraction of background cloud points to plot (0-1)
+    clip_quantile=0.1,     # trim this fraction from each tail when setting axis limits
+    mean_marker_size=100,   # marker size for the target distribution mean star
 ):
     model_name = "ae_best_model_bo_2"
     pickle_filename = f"data/{model_name}_ot_data.pkl"
     with open(pickle_filename, "rb") as f:
         model_transport_data = pickle.load(f)
-    os.makedirs(save_dir, exist_ok=True)
 
+    os.makedirs(save_dir, exist_ok=True)
     n_points = MAX_POINTS
     label = f"source_{source_label}_target_{target_label}"
     gammas = sorted(model_transport_data.keys())
 
-    # --- Filter and encode source/target images once, fixed across all gammas ---
-    def encode_label(target_class):
+    def encode_label(target_class, n_points=n_points, seed=34):
+        rng = np.random.default_rng(seed)
+        indices = rng.permutation(len(training_data))
         xs = []
-        for img, lbl in training_data:
+        for i in indices:
+            img, lbl = training_data[i]
             if lbl == target_class:
                 xs.append(img.numpy())
             if len(xs) >= n_points:
@@ -135,45 +141,131 @@ def plot_barycentric_geometry_vs_gamma_dim2(
     latent_source = encode_label(source_label)
     latent_target = encode_label(target_label)
 
-    n_src = latent_source.shape[0]
-    n_tgt = latent_target.shape[0]
+    # --- mean of the full target distribution (computed once, fixed across gammas) ---
+    target_mean = latent_target.mean(axis=0)
+
+    # --- subsample background clouds for clarity ---
+    rng = np.random.default_rng(0)
+    if background_frac < 1.0:
+        n_src_show = max(1, int(latent_source.shape[0] * background_frac))
+        n_tgt_show = max(1, int(latent_target.shape[0] * background_frac))
+        src_bg_idx = rng.choice(latent_source.shape[0], n_src_show, replace=False)
+        tgt_bg_idx = rng.choice(latent_target.shape[0], n_tgt_show, replace=False)
+    else:
+        src_bg_idx = np.arange(latent_source.shape[0])
+        tgt_bg_idx = np.arange(latent_target.shape[0])
+
+    src_bg = latent_source[src_bg_idx]
+    tgt_bg = latent_target[tgt_bg_idx]
+
+    # --- compute robust axis limits (trim outliers) ---
+    all_pts = np.vstack([latent_source, latent_target])
+    lo = np.quantile(all_pts, clip_quantile, axis=0)
+    hi = np.quantile(all_pts, 1 - clip_quantile, axis=0)
+    pad = 0.1 * (hi - lo)
+    xlim = (lo[0] - pad[0], hi[0] + pad[0])
+    ylim = (lo[1] - pad[1], hi[1] + pad[1])
 
     n_cols = len(gammas)
     fig, axes = plt.subplots(1, n_cols, figsize=(5 * n_cols, 5), sharex=True, sharey=True)
     if n_cols == 1:
         axes = [axes]
 
+    # define colors/labels once so every subplot is consistent and we can
+    # build a single shared legend afterwards
+    legend_handles = [
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue",
+                    markersize=8, alpha=0.5, label=f"Digit {source_label} (source distribution)"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:orange",
+                    markersize=8, alpha=0.5, label=f"Digit {target_label} (target distribution)"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue",
+                    markeredgecolor="black", markersize=10, label=f"Source Points to be Transported"),
+        plt.Line2D([0], [0], marker="^", color="w", markerfacecolor="tab:green",
+                    markeredgecolor="black", markersize=10, label="Transported Points in Target "),
+        plt.Line2D([0], [0], color="gray", linewidth=1.2, label="Transport map"),
+        plt.Line2D([0], [0], marker="*", color="w", markerfacecolor="red",
+                    markeredgecolor="black", markersize=16, label=f"Mean of Digit {target_label} distribution"),
+    ]
+
     for ax, gamma in zip(axes, gammas):
         P = model_transport_data[gamma][label]["P"]
-        
-        n_tgt_P = P.shape[1]  # how many target points P was built with
-        latent_target_P = latent_target[:n_tgt_P]  # trim to match
-        
+        n_tgt_P = P.shape[1]
+        latent_target_P = latent_target[:n_tgt_P]
+
         p_y_given_x = P / P.sum(axis=1, keepdims=True)
-        expected_target = p_y_given_x @ latent_target_P  # now (n_src, 2)
-        
+        expected_target = p_y_given_x @ latent_target_P  # (n_src, 2)
+
+        # --- background clouds (faint, subsampled) ---
         ax.scatter(
-            latent_source[:, 0], latent_source[:, 1],
-            c="gray", marker="x", s=point_size, alpha=alpha * 0.7,
-            label="source",
+            src_bg[:, 0], src_bg[:, 1],
+            c="tab:blue", marker="o", s=point_size, alpha=alpha * 0.25,
+            edgecolors="none",
         )
         ax.scatter(
-            latent_target[:, 0], latent_target[:, 1],
-            c="tab:blue", marker="o", s=point_size, alpha=alpha,
-            label="target",
-        )
-        ax.scatter(
-            expected_target[:, 0], expected_target[:, 1],
-            c="tab:orange", marker="^", s=point_size, alpha=alpha,
-            label="barycentric (expected target)",
+            tgt_bg[:, 0], tgt_bg[:, 1],
+            c="tab:orange", marker="o", s=point_size, alpha=alpha * 0.25,
+            edgecolors="none",
         )
 
+        # --- highlighted subset + connecting lines ---
+        n_hl = min(n_highlight, latent_source.shape[0])
+        idx = np.arange(n_hl)
+
+        src_hl = latent_source[idx]
+        tgt_hl = expected_target[idx]
+
+        for i in range(n_hl):
+            ax.plot(
+                [src_hl[i, 0], tgt_hl[i, 0]],
+                [src_hl[i, 1], tgt_hl[i, 1]],
+                color="gray", linewidth=0.8, alpha=0.8, zorder=2,
+            )
+
+        ax.scatter(
+            src_hl[:, 0], src_hl[:, 1],
+            c="tab:blue", marker="o", s=highlight_size,
+            edgecolors="black", linewidths=0.8, zorder=3,
+        )
+        ax.scatter(
+            tgt_hl[:, 0], tgt_hl[:, 1],
+            c="tab:green", marker="^", s=highlight_size,
+            edgecolors="black", linewidths=0.8, zorder=3,
+        )
+
+        # --- mean of the target distribution, as a star, on top of everything ---
+        ax.scatter(
+            target_mean[0], target_mean[1],
+            c="red", marker="*", s=mean_marker_size,
+            edgecolors="black", linewidths=1.0, zorder=4,
+        )
+
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         ax.set_title(f"γ={gamma:.4f}")
         ax.set_xlabel("Latent dim 1")
 
-    plt.savefig(f"{save_dir}/plot_barycentric_geometry_vs_gamma_dim2.png", dpi=300, bbox_inches="tight")
+    axes[0].set_ylabel("Latent dim 2")
+    fig.legend(
+        handles=legend_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.08),
+        ncol=len(legend_handles) // 2 + 1,
+        frameon=False,
+    )
 
+    fig.suptitle(
+        f"OT Transport: digit {source_label} → digit {target_label} "
+        f"({n_highlight} points), across γ",
+        y=1.15,
+    )
 
+    if save:
+        plt.savefig(
+            f"{save_dir}/plot_barycentric_geometry_vs_gamma_dim2.png",
+            dpi=300, bbox_inches="tight",
+        )
+
+    return fig
 
 
 def plot_reconstruction(training_data, model, n_examples=10):

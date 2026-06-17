@@ -1,7 +1,7 @@
 MODELS_DIM = [2,4, 8,10,16,32]  # 128
 INTERMEDIATE_FRACTIONS = [0.25, 0.5, 0.75, 1.0]
 GAMMA = [0.001,0.01,0.1,1]  # regularization strength for Sinkhorn
-MAX_POINTS = 1000  # amount of max decoded images
+MAX_POINTS = 700  # amount of max decoded images
 MAX_ITERATION = 10000  # Sinkhorn iterations
 LABELS = [0,1,2,3,4,5,6,7,8,9]
 STOP_THRESHOLD = 1e-4
