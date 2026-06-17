@@ -485,6 +485,209 @@ def fig_F_pareto_time_vs_mmd(summary_df, save_dir="figures/plots", save=True):
     plt.show()
 
 
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import sem, t
+import os
+
+
+def _compute_mean_ci(values, confidence=0.95):
+    values = np.asarray(values)
+
+    mean = values.mean()
+
+    if len(values) > 1:
+        ci = sem(values) * t.ppf((1 + confidence) / 2, len(values) - 1)
+    else:
+        ci = 0.0
+
+    return mean, ci
+
+
+def _plot_metrics(summary_df, metrics, filename, title):
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+
+    fig, axes = plt.subplots(
+        len(metrics),
+        1,
+        figsize=(7, 2.8 * len(metrics)),
+        sharex=True,
+        constrained_layout=True,
+    )
+
+    if len(metrics) == 1:
+        axes = [axes]
+
+    for ax, (metric, label) in zip(axes, metrics.items()):
+
+        means = []
+        cis = []
+
+        for dim in latent_dims:
+
+            values = summary_df.loc[
+                (summary_df["latent_dim"] == dim)
+                & (summary_df["gamma"] == OPTIMAL_GAMMA),
+                metric,
+            ].dropna()
+
+            mean, ci = _compute_mean_ci(values)
+
+            means.append(mean)
+            cis.append(ci)
+
+        ax.errorbar(
+            latent_dims,
+            means,
+            yerr=cis,
+            fmt="o-",
+            linewidth=2,
+            capsize=5,
+            markersize=6,
+        )
+
+        ax.set_ylabel(label)
+        ax.grid(True, alpha=0.3)
+
+        # Optional: remove top/right spines for publication style
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    axes[-1].set_xlabel("Latent Dimension")
+
+    fig.suptitle(title, fontsize=14)
+
+    plt.savefig(
+        filename,
+        bbox_inches="tight",
+        dpi=300,
+    )
+
+    plt.show()
+
+
+def fig_2_dim_vs_gamma_metrics_plots(summary_df):
+    os.makedirs("figures/rapport", exist_ok=True)
+
+    # ----------------------------
+    # Figure 2a: Latent-space metrics
+    # ----------------------------
+    latent_metrics = {
+        "entropy": r"Entropy of $P$",
+        "wasserstein_distance_latent": "Latent Wasserstein Distance",
+        "mmd_latent": "Latent MMD",
+    }
+
+    _plot_metrics(
+        summary_df=summary_df,
+        metrics=latent_metrics,
+        filename="figures/rapport/fig_2a_latent_metrics.pdf",
+        title="Latent-Space Evaluation Metrics",
+    )
+
+    # ----------------------------
+    # Figure 2b: Image-space metrics
+    # ----------------------------
+    image_metrics = {
+        "mmd_image": "Image MMD",
+        "classifier_confidence_image": "Classifier Probability",
+    }
+
+    _plot_metrics(
+        summary_df=summary_df,
+        metrics=image_metrics,
+        filename="figures/rapport/chat_fig_2b_image_metrics.pdf",
+        title="Image-Space Evaluation Metrics",
+    )
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import sem, t
+import os
+
+
+def fig_2_dim_vs_gamma_metrics_plot(
+    summary_df,
+    save=True,
+    save_dir="figures/rapport",
+):
+    os.makedirs(save_dir, exist_ok=True)
+
+    metrics = {
+        "entropy": "Entropy of $P$",
+        "wasserstein_distance_latent": "Latent Wasserstein Distance",
+        "mmd_latent": "Latent MMD",
+        "mmd_image": "Image MMD",
+        "classifier_confidence_image": "Classifier Probability",
+    }
+
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+
+    fig, axes = plt.subplots(
+        nrows=len(metrics),
+        ncols=1,
+        figsize=(7, 12),
+        sharex=True,
+        constrained_layout=True,
+    )
+
+    for ax, (metric, title) in zip(axes, metrics.items()):
+
+        means = []
+        ci_lower = []
+        ci_upper = []
+
+        for dim in latent_dims:
+
+            values = summary_df.loc[
+                (summary_df["latent_dim"] == dim)
+                & (summary_df["gamma"] == OPTIMAL_GAMMA),
+                metric,
+            ].dropna()
+
+            mean = values.mean()
+
+            if len(values) > 1:
+                confidence = 0.95
+                ci = (
+                    sem(values)
+                    * t.ppf((1 + confidence) / 2, len(values) - 1)
+                )
+            else:
+                ci = 0
+
+            means.append(mean)
+            ci_lower.append(ci)
+            ci_upper.append(ci)
+
+        ax.errorbar(
+            latent_dims,
+            means,
+            yerr=[ci_lower, ci_upper],
+            fmt="o-",
+            capsize=4,
+            linewidth=1.5,
+            markersize=6,
+        )
+
+        ax.set_ylabel(title)
+        ax.grid(True, alpha=0.3)
+
+    axes[-1].set_xlabel("Latent Dimension")
+
+    if save:
+        plt.savefig(
+            os.path.join(
+                save_dir,
+                "chat_fig_2_dim_vs_gamma_metrics_confidence_intervals.pdf",
+            ),
+            bbox_inches="tight",
+        )
+
+    plt.show()
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
@@ -494,3 +697,5 @@ if __name__ == "__main__":
     fig_D_latent_vs_image_mmd_scatter(summary_df)
     fig_E_wasserstein_vs_mmd_across_dims(summary_df)
     fig_F_pareto_time_vs_mmd(summary_df)
+    fig_2_dim_vs_gamma_metrics_plot(summary_df)
+    fig_2_dim_vs_gamma_metrics_plots(summary_df)
