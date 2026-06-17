@@ -381,55 +381,12 @@ def plot_mmd_image_heatmaps_full(summary_df, save=True, save_dir="figures/heatma
             plt.savefig(f"{save_dir}/mmd_image_heatmap_full_dim_{latent_dim}.png", dpi=300)
         plt.close()
 
-
-def plot_mmd_latent_heatmaps_full(summary_df, save=True, save_dir="figures/heatmaps"):
-
-    os.makedirs(save_dir, exist_ok=True)
-
-    labels = LABELS
-    latent_dims = sorted(summary_df["latent_dim"].unique())
-
-    # Shared color scale across all dims
-    global_vmin = summary_df["mmd_latent"].min()
-    global_vmax = summary_df["mmd_latent"].max()
-
-    matrices = {}
-    for latent_dim in latent_dims:
-        # Average over all gammas (was wrongly filtered to gamma=0.1 before)
-        model_df = summary_df[summary_df["latent_dim"] == latent_dim]
-        matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
-        grouped = model_df.groupby(["source_label", "target_label"])["mmd_latent"].mean()
-        for (src, tgt), value in grouped.items():
-            matrix.loc[src, tgt] = value
-        matrices[latent_dim] = matrix
-
-        _, ax = plt.subplots(figsize=(8, 8))
-        im = ax.imshow(matrix, vmin=global_vmin, vmax=global_vmax, cmap="viridis_r")
-        ax.set_xticks(range(len(labels)))
-        ax.set_xticklabels(labels)
-        ax.set_yticks(range(len(labels)))
-        ax.set_yticklabels(labels)
-        ax.set_xlabel("Target Label")
-        ax.set_ylabel("Source Label")
-        ax.set_title(f"MMD Latent Heatmap (avg over γ)\nLatent Dim = {latent_dim}  |  mean = {model_df['mmd_latent'].mean():.4f}")
-        plt.colorbar(im, ax=ax, label="MMD Latent")
-
-        for i in range(len(labels)):
-            for j in range(len(labels)):
-                val = matrix.iloc[i, j]
-                if not np.isnan(val):
-                    ax.text(j, i, f"{val:.4f}", ha="center", va="center", fontsize=7)
-
-        plt.tight_layout()
-        if save:
-            plt.savefig(f"{save_dir}/mmd_latent_heatmap_full_dim_{latent_dim}.png", dpi=300)
-        plt.close()
-
+        
 def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/rapport"):
     """Per-dim figure: MMD Latent (left) + Wasserstein Latent (right) at a fixed gamma,
-    full asymmetric heatmap — all (src→tgt) and (tgt→src) pairs as distinct cells."""
+    full 10×10 asymmetric heatmap of all 90 directed pairs."""
     os.makedirs(save_dir, exist_ok=True)
-    labels = LABELS
+    labels = LABELS  # e.g. [0,1,...,9]
     df = summary_df[summary_df["gamma"] == OPTIMAL_GAMMA]
     latent_dims = sorted(df["latent_dim"].unique())
 
@@ -443,15 +400,10 @@ def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/
         wass_means = model_df.groupby(["source_label", "target_label"])["wasserstein_distance_latent"].mean()
 
         for (src, tgt), val in mmd_means.items():
-            mmd_matrix.loc[src, tgt] = val
-            # Also fill the reverse direction if not already present in the data
-            if (tgt, src) not in mmd_means.index:
-                mmd_matrix.loc[tgt, src] = val
+            mmd_matrix.at[src, tgt] = val  # .at avoids label/loc ambiguity
 
         for (src, tgt), val in wass_means.items():
-            wass_matrix.loc[src, tgt] = val
-            if (tgt, src) not in wass_means.index:
-                wass_matrix.loc[tgt, src] = val
+            wass_matrix.at[src, tgt] = val
 
         fig, (ax_mmd, ax_wass) = plt.subplots(1, 2, figsize=(18, 8))
 
@@ -503,11 +455,53 @@ def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/
 
         if save:
             plt.savefig(
-                f"{save_dir}/figure_3_latent_heatmaps_dim_{latent_dim}.png",
+                f"{save_dir}/fig_3_latent_heatmaps_dim_{latent_dim}.png",
                 dpi=300, bbox_inches="tight"
             )
         plt.close()
 
+def plot_mmd_latent_heatmaps_full(summary_df, save=True, save_dir="figures/heatmaps"):
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    labels = LABELS
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+
+    # Shared color scale across all dims
+    global_vmin = summary_df["mmd_latent"].min()
+    global_vmax = summary_df["mmd_latent"].max()
+
+    matrices = {}
+    for latent_dim in latent_dims:
+        # Average over all gammas (was wrongly filtered to gamma=0.1 before)
+        model_df = summary_df[summary_df["latent_dim"] == latent_dim]
+        matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
+        grouped = model_df.groupby(["source_label", "target_label"])["mmd_latent"].mean()
+        for (src, tgt), value in grouped.items():
+            matrix.loc[src, tgt] = value
+        matrices[latent_dim] = matrix
+
+        _, ax = plt.subplots(figsize=(8, 8))
+        im = ax.imshow(matrix, vmin=global_vmin, vmax=global_vmax, cmap="viridis_r")
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels)
+        ax.set_yticks(range(len(labels)))
+        ax.set_yticklabels(labels)
+        ax.set_xlabel("Target Label")
+        ax.set_ylabel("Source Label")
+        ax.set_title(f"MMD Latent Heatmap (avg over γ)\nLatent Dim = {latent_dim}  |  mean = {model_df['mmd_latent'].mean():.4f}")
+        plt.colorbar(im, ax=ax, label="MMD Latent")
+
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                val = matrix.iloc[i, j]
+                if not np.isnan(val):
+                    ax.text(j, i, f"{val:.4f}", ha="center", va="center", fontsize=7)
+
+        plt.tight_layout()
+        if save:
+            plt.savefig(f"{save_dir}/mmd_latent_heatmap_full_dim_{latent_dim}.png", dpi=300)
+        plt.close()
 
 
 def plot_latent_space_dim(model, dim, x_sub, labels_sub, point_size=4, alpha=0.6, save=True, save_dir="figures/plots"):
