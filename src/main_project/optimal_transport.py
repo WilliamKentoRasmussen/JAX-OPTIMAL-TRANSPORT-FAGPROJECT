@@ -5,6 +5,7 @@ import pickle
 import torch
 from typing import Union
 from itertools import combinations
+from itertools import permutations
 
 import numpy as np
 import pandas as pd
@@ -169,7 +170,7 @@ def save_transformations():
             if gamma_val not in model_transport_data:
                 model_transport_data[gamma_val] = {}
 
-            for source_label, target_label in combinations(LABELS, 2):
+            for source_label, target_label in permutations(LABELS, 2):
                 if VERBOSE_OPTIMAL_TRANSPORT:
                     print(f"\n--- source = {source_label} and target = {target_label} ---")
                 start = time.perf_counter()
