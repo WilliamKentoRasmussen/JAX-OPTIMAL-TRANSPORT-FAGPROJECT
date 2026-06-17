@@ -123,10 +123,10 @@ def entropy_for_transport_plan(T: jnp.ndarray):
 columns = ["Fraction of transport", "MMD", "Confidence of Classifier", "FID"]
 
 
-def evaluate_by_model_in_image_space(sinkhorn_data, target_label, save_dir):
-    target_img = jnp.asarray(sinkhorn_data["target_images"])
+def evaluate_by_model_in_image_space(sinkhorn_data, target_label, save_dir, decoder):
+    #target_img = jnp.asarray(sinkhorn_data["target_images"])
 
-    #target_img = jnp.asarray(decode(sinkhorn_data["target_eval"]))
+    target_img = jax.vmap(decoder)(sinkhorn_data["target_eval"])
     expected_target_img = jnp.asarray(sinkhorn_data["expected_target_images"])
 
     if "intermediate_images" in sinkhorn_data:
@@ -193,13 +193,15 @@ def wasserstein_distance_subsampled(source_imgs, target_imgs, max_points=200, se
 
 #     return np.mean(distances)
 
-
+from main_project.utils import load, load_with_hyperparams
 def run_evaluation():
     summary = []
 
     for dim in MODELS_DIM:
         model_name = f"ae_best_model_bo_{dim}"
         pickle_filename = f"data/{model_name}_ot_data.pkl"
+
+        model = load_with_hyperparams(name=model_name, path="models")
 
         if not os.path.exists(pickle_filename):
             print(f"Skipping {model_name} because {pickle_filename} does not exist.")
@@ -230,7 +232,7 @@ def run_evaluation():
 
                 # Image space metrics assessment
                 mmd_img, classifier_conf_img = evaluate_by_model_in_image_space(
-                    sinkhorn_data=sinkhorn_data, target_label=target_label, save_dir=save_dir
+                    sinkhorn_data=sinkhorn_data, target_label=target_label, save_dir=save_dir, decoder = model.decoder
                 )
                 # fid_img =
 
