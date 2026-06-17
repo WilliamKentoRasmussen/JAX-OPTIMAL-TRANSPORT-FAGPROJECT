@@ -10,6 +10,7 @@ import pandas as pd
 import pickle
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.decomposition import PCA
+from main_project.optimal_transport import get_trajectory
 from main_project.utils import load_with_hyperparams
 from scipy import stats
 from sklearn.neighbors import KNeighborsClassifier
@@ -18,7 +19,7 @@ from main_project.utils import load, load_with_hyperparams
 from main_project.data import getData  # fixed
 from main_project.train import train_classifier
 from main_project.model import targetClassifier
-from main_project.environment import LABELS, MODELS_DIM, OPTIMAL_GAMMA
+from main_project.environment import LABELS, MAX_POINTS, MODELS_DIM, OPTIMAL_GAMMA
 from main_project.data import getData
 import os
 
@@ -99,6 +100,76 @@ def plot_latent_clusters(training_data, model, max_points=20000, point_size=4, a
     plt.colorbar(scatter, ax=ax).set_label("Digit")
     plt.tight_layout()
     plt.show()
+
+
+def plot_barycentric_geometry_vs_gamma_dim2(
+    training_data,
+    model,
+    source_label,
+    target_label,
+    save_dir="figures/plots",
+    save=True,
+    point_size=12,
+    alpha=0.6,
+):
+    model_name = "ae_best_model_bo_2"
+    pickle_filename = f"data/{model_name}_ot_data.pkl"
+    with open(pickle_filename, "rb") as f:
+        model_transport_data = pickle.load(f)
+    os.makedirs(save_dir, exist_ok=True)
+
+    n_points = MAX_POINTS
+    label = f"source_{source_label}_target_{target_label}"
+    gammas = sorted(model_transport_data.keys())
+
+    # --- Filter and encode source/target images once, fixed across all gammas ---
+    def encode_label(target_class):
+        xs = []
+        for img, lbl in training_data:
+            if lbl == target_class:
+                xs.append(img.numpy())
+            if len(xs) >= n_points:
+                break
+        x = jnp.array(xs).reshape(len(xs), -1)
+        _, z = jax.vmap(model)(x)
+        return np.array(z)
+
+    latent_source = encode_label(source_label)
+    latent_target = encode_label(target_label)
+
+    n_src = latent_source.shape[0]
+    n_tgt = latent_target.shape[0]
+
+    n_cols = len(gammas)
+    fig, axes = plt.subplots(1, n_cols, figsize=(5 * n_cols, 5), sharex=True, sharey=True)
+    if n_cols == 1:
+        axes = [axes]
+
+    for ax, gamma in zip(axes, gammas):
+        P = model_transport_data[gamma][label]["P"]
+
+        # Vectorized row-normalization, matching get_probability_y_given_x exactly
+        p_y_given_x = P / P.sum(axis=1, keepdims=True)
+        expected_target = p_y_given_x @ latent_target
+
+        ax.scatter(
+            latent_source[:, 0], latent_source[:, 1],
+            c="gray", marker="x", s=point_size, alpha=alpha * 0.7,
+            label="source",
+        )
+        ax.scatter(
+            latent_target[:, 0], latent_target[:, 1],
+            c="tab:blue", marker="o", s=point_size, alpha=alpha,
+            label="target",
+        )
+        ax.scatter(
+            expected_target[:, 0], expected_target[:, 1],
+            c="tab:orange", marker="^", s=point_size, alpha=alpha,
+            label="barycentric (expected target)",
+        )
+
+        ax.set_title(f"γ={gamma:.4f}")
+        ax.set_xlabel("Latent dim 1")
 
 
 def plot_reconstruction(training_data, model, n_examples=10):
@@ -206,9 +277,6 @@ def plot_training_loss(data):
     plt.show()
 
 
-import os
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 def fig_2_dim_vs_gamma_metrics_table(summary_df):
@@ -520,64 +588,76 @@ def plot_latent_space_dim(model, dim, x_sub, labels_sub, point_size=4, alpha=0.6
     plt.show()
 
 
-def plot_sinkhorn_iterations_vs_gamma(
-    csv_path="sinkhorn_iterations_and_times.csv",
+def plot_mmd_vs_gamma(
+    df=None,
+    csv_path="data/evaluation_summary.csv",
     save_dir="figures/plots",
     save=True,
-    alpha=0.01,
+    by_dim=True,
 ):
-    df = pd.read_csv(csv_path)
+    if df is None:
+        df = pd.read_csv(csv_path)
     os.makedirs(save_dir, exist_ok=True)
+
     gammas = sorted(df["gamma"].unique())
 
-    samples = [
-        df.loc[df["gamma"] == g, "sinkhorn_iterations"].values
-        for g in gammas
-    ]
-    means = np.array([np.mean(s) for s in samples])
-    stds  = np.array([np.std(s, ddof=1) if len(s) > 1 else 0.0 for s in samples])
+    if by_dim:
+        dims = sorted(df["latent_dim"].unique())
+        _, ax = plt.subplots(figsize=(9, 6))
+        cmap = plt.cm.viridis(np.linspace(0, 1, len(dims)))
 
-    # Walk consecutive pairs: stop at first non-significant drop
-    best_idx = 0
-    for i in range(len(gammas) - 1):
-        # One-sided: is samples[i] > samples[i+1]? (higher gamma → fewer iterations)
-        _, p = stats.ttest_ind(samples[i], samples[i + 1], alternative="greater")
-        if p >= alpha:
-            best_idx = i  # no significant improvement beyond this gamma
-            break
+        for color, d in zip(cmap, dims):
+            sub = df[df["latent_dim"] == d]
+            means = [sub.loc[sub["gamma"] == g, "mmd_latent"].mean() for g in gammas]
+
+            ax.plot(
+                gammas, means,
+                "o-", linewidth=2, markersize=5,
+                color=color, alpha=0.9,
+                label=f"latent_dim={d}"
+            )
+
+            best_i = int(np.nanargmin(means))
+            ax.scatter(gammas[best_i], means[best_i], color=color, edgecolor="black",
+                       zorder=5, s=80, marker="*")
+
+        ax.set_xscale("log")
+        ax.set_xlabel(r"$\gamma$", fontsize=13)
+        ax.set_ylabel("Latent MMD", fontsize=13)
+        ax.set_title(r"Latent MMD vs $\gamma$ by Latent Dimension", fontsize=14)
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        plt.tight_layout()
+        fname = "mmd_vs_gamma_by_dim.png"
+
     else:
-        best_idx = len(gammas) - 1  # all differences significant, take largest
-    best_gamma = gammas[best_idx]
+        means = [df.loc[df["gamma"] == g, "mmd_latent"].mean() for g in gammas]
+        best_idx = int(np.argmin(means))
+        best_gamma = gammas[best_idx]
 
-    _, ax = plt.subplots(figsize=(8, 5))
-    ax.errorbar(
-        gammas, means, yerr=[np.minimum(stds, means), stds],
-        fmt="o-", linewidth=2, markersize=6,
-        capsize=4, capthick=1.5,
-        color="steelblue", ecolor="steelblue", elinewidth=1, alpha=0.9,
-        label="mean ± std"
-    )
-    ax.axvline(best_gamma, color="tomato", linestyle="--", linewidth=1.5,
-               label=f"best γ={best_gamma:.4f} (first non-significant step, α={alpha})")
+        _, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(
+            gammas, means,
+            "o-", linewidth=2, markersize=6,
+            color="steelblue", alpha=0.9,
+            label="mean MMD"
+        )
+        ax.axvline(best_gamma, color="tomato", linestyle="--", linewidth=1.5,
+                   label=f"best γ={best_gamma:.4f} (min mean MMD)")
+        ax.set_xscale("log")
+        ax.set_xlabel(r"$\gamma$", fontsize=13)
+        ax.set_ylabel("Latent MMD", fontsize=13)
+        ax.set_title(r"Average Latent MMD vs $\gamma$", fontsize=14)
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        plt.tight_layout()
+        fname = "mmd_vs_gamma_avg.png"
 
-    ax.set_xscale("log")
-    ax.set_xlabel(r"$\gamma$", fontsize=13)
-    ax.set_ylabel("Sinkhorn Iterations", fontsize=13)
-    ax.set_title(r"Sinkhorn Iterations vs $\gamma$", fontsize=14)
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    plt.tight_layout()
+        print(f"Best γ: {best_gamma:.4f}  →  MMD = {means[best_idx]:.4f}")
 
     if save:
-        plt.savefig(f"{save_dir}/sinkhorn_iterations_vs_gamma.png", dpi=300, bbox_inches="tight")
+        plt.savefig(f"{save_dir}/{fname}", dpi=300, bbox_inches="tight")
     plt.show()
-
-    print(f"Best γ: {best_gamma:.4f}  →  {means[best_idx]:.1f} ± {stds[best_idx]:.1f} iterations")
-    print(f"\nPairwise t-tests (one-sided, α={alpha}):")
-    for i in range(len(gammas) - 1):
-        _, p = stats.ttest_ind(samples[i], samples[i + 1], alternative="greater")
-        sig = "✓ significant" if p < alpha else "✗ not significant ← stop"
-        print(f"  γ={gammas[i]:.4f} vs γ={gammas[i+1]:.4f}:  p={p:.4f}  {sig}")
 
 
 def plot_interpolation_paths_across_dims(
@@ -1140,70 +1220,16 @@ def fig_0_plot_barycentric_blurring_effect(summary_df, save_dir="figures/plots",
 
 
 from matplotlib.lines import Line2D
-def fig_1_plot_boxplot_mmd_per_gamma(summary_df, save_dir="figures/boxplots"):
-    os.makedirs(save_dir, exist_ok=True)
-
-    gammas = sorted(summary_df["gamma"].unique())
-
-    distributions = []
-    for gamma in gammas:
-        mask = summary_df["gamma"] == gamma
-        distributions.append(
-            summary_df.loc[mask, "mmd_image"].values  # full pipeline MMD
-        )
-
-    FLIER_PROPS   = dict(marker="o", markerfacecolor="none",
-                         markeredgecolor="#555", markersize=4, linestyle="none")
-    BOX_PROPS     = dict(facecolor="#d9e8f5", color="#2c5f8a")
-    MEDIAN_PROPS  = dict(color="#c0392b", linewidth=1.8)
-    WHISKER_PROPS = dict(color="#2c5f8a", linewidth=1.2)
-    CAP_PROPS     = dict(color="#2c5f8a", linewidth=1.2)
-
-    fig = plt.figure(figsize=(10, 7))
-    tick_labels = [str(gamma) for gamma in gammas]
-
-    ax = fig.add_axes([0.1, 0.15, 0.85, 0.75])  # leave room for legend
-
-    bp = ax.boxplot(                   # noqa: F841
-        distributions,                 # ← was distributions["running_time"]
-        patch_artist=True,
-        flierprops=FLIER_PROPS,
-        boxprops=BOX_PROPS,
-        medianprops=MEDIAN_PROPS,
-        whiskerprops=WHISKER_PROPS,
-        capprops=CAP_PROPS,
-    )
-
-    ax.set_xticks(range(1, len(gammas) + 1))
-    ax.set_xticklabels(tick_labels)
-    ax.set_xlabel("Regularisation $\\gamma$")        # ← was "Latent dimension $d$"
-    ax.set_ylabel("MMD (image space)")               # ← was "Running time (s)"
-    ax.set_title("MMD per $\\gamma$ (image space)")  # ← was Running time title
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-
-    legend_elements = [
-        Line2D([0], [0], color="#c0392b", linewidth=1.8, label="Median"),
-        plt.Rectangle((0, 0), 1, 1, facecolor="#d9e8f5",
-                      edgecolor="#2c5f8a", label="IQR (box)"),
-    ]
-    fig.legend(
-        handles=legend_elements,
-        loc="lower center",
-        ncol=2,
-        frameon=False,
-        fontsize=10,
-        bbox_to_anchor=(0.5, -0.04),
-    )
-
-    save_path = os.path.join(save_dir, "boxplot_mmd_per_gamma.png")
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Figure saved to: {save_path}")
 
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
+    training_data,_ = getData()
+    model = load_with_hyperparams("ae_best_model_bo_2")
+    plot_barycentric_geometry_vs_gamma_dim2(training_data,model=model,source_label=0,target_label=1)
+    # pca_visualize_for_high_dimension(training_data,model=load_with_hyperparams("ae_best_model_bo_4"))
+    # plot_mmd_vs_gamma(df=summary_df)
     #fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
-    fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
-    fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
-    fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
-    fig_4_plot_gamma_vs_mmd(summary_df=summary_df)
+    # fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
+    # fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    # fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
+    # fig_4_plot_gamma_vs_mmd(summary_df=summary_df)
