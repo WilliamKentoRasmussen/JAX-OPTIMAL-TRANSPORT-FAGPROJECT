@@ -34,8 +34,10 @@ def evaluate_KNN_lantent_quality(model_name="ae_best_model_bo_2"):
     neigh.fit(z_train, y_train)
 
     score = neigh.score(z_test, y_test)
+    n = len(z_test) 
+    ci = 1.96 * np.sqrt(score * (1 - score) / n)
     # ADD CI !!! 
-    return score 
+    return score, ci
 
 def evaluate_logistic_regression(model_name="ae_best_model_bo_2"): 
     training_data, test_data = getData()
@@ -55,10 +57,14 @@ def evaluate_logistic_regression(model_name="ae_best_model_bo_2"):
 
     clf = LogisticRegression(random_state=0).fit(z_train, y_train)
     z_pred = clf.predict(z_test)
-    print(classification_report(z_pred, y_test))
-    acc = clf.score(z_test, y_test)
+    #print(classification_report(z_pred, y_test))
 
-    return acc
+    acc = clf.score(z_test, y_test)
+    # 95 % confidenze intervals b
+    n = len(z_test)
+    ci = 1.96 * np.sqrt(acc * (1 - acc) / n)
+
+    return acc, ci
 
 
 
@@ -85,7 +91,7 @@ def evaluate_test_MSE(model_name="ae_best_model_bo_2"):
     # CI need to bee added !!! 
     mse_ci = 1.96 * np.std(per_sample_mse) / np.sqrt(len(per_sample_mse))
     
-    return mse
+    return mse, mse_ci
 
     
 
@@ -198,27 +204,20 @@ def plot_interpolation_reconstructions(
     plt.show()
 
 
+
 if __name__ == "__main__":
-    for dim in MODELS_DIM: 
-        for gamma in GAMMA:
-            plot_interpolation_reconstructions(model_name=f"ae_best_model_bo_{dim}", gamma=gamma)
-
-
-
-"""if __name__ == "__main__":
     results = []
     for dim in MODELS_DIM:
-        score = evaluate_KNN_lantent_quality(model_name=f"ae_best_model_bo_{dim}")
-        MSE = evaluate_test_MSE(model_name=f"ae_best_model_bo_{dim}")
-        acc = evaluate_logistic_regression(model_name=f"ae_best_model_bo_{dim}")
-        print(f"KNN accuracy for dimension {dim}: {score}")
+        KNN_score, KNN_ci = evaluate_KNN_lantent_quality(model_name=f"ae_best_model_bo_{dim}")
+        MSE, mse_ci = evaluate_test_MSE(model_name=f"ae_best_model_bo_{dim}")
+        LR_acc, LR_ci = evaluate_logistic_regression(model_name=f"ae_best_model_bo_{dim}")
+        print(f"KNN accuracy for dimension {dim}: {KNN_score}")
         print(f"Reconstruction error for dimension {dim}: {MSE}")
-        print(f"Logistic Regression acc. for dimension {dim}: {acc}")
-        results.append({"dim": dim, "knn_accuracy": score, "reconstruction_mse": MSE, "Logistic Regression acc." : acc})
+        print(f"Logistic Regression acc. for dimension {dim}: {LR_acc}")
+        results.append({"dim": dim, 
+                        "reconstruction_mse": (MSE, mse_ci),
+                        "knn_accuracy": (KNN_score, KNN_ci),
+                        "Logistic Regression acc." : (LR_acc, LR_ci)})
 
-    pd.DataFrame(results).to_csv("results.csv", index=False)
-    print("Saved results to results.csv")
 
-    plot_reconstruction_for_all_dim()
-    plot_interpolation_reconstructions()
-"""
+    print(pd.DataFrame(results).to_latex(index=False))
