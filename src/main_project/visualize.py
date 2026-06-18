@@ -42,7 +42,13 @@ def apply():
     })
 
 apply()
-
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy import stats
+ 
+ 
 def plot_transport_images(original_images, expected_target_images, n=5, title="Transport plot"):
     fig, axes = plt.subplots(2, n, figsize=(2 * n, 4))
 
@@ -109,10 +115,15 @@ def plot_barycentric_geometry_vs_gamma_dim2(
     point_size=12,
     alpha=0.6,
     n_highlight=35,         # how many source points to draw transport lines for
-    highlight_size=60,      # marker size for highlighted points
+    highlight_size=80,      # marker size for highlighted points
     background_frac=1.0,    # fraction of background cloud points to plot (0-1)
     clip_quantile=0.1,     # trim this fraction from each tail when setting axis limits
     mean_marker_size=100,   # marker size for the target distribution mean star
+    title_fontsize=16,
+    label_fontsize=16,
+    legend_fontsize=16,
+    suptitle_fontsize=16,
+    tick_fontsize=11
 ):
     model_name = "ae_best_model_bo_2"
     pickle_filename = f"data/{model_name}_ot_data.pkl"
@@ -241,22 +252,25 @@ def plot_barycentric_geometry_vs_gamma_dim2(
 
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
-        ax.set_title(f"γ={gamma:.4f}")
-        ax.set_xlabel("Latent dim 1")
+        ax.set_title(f"γ={gamma:.4f}", fontsize=title_fontsize)
+        ax.set_xlabel("Latent dim 1", fontsize=label_fontsize)
+        ax.tick_params(axis="both", labelsize=tick_fontsize)
 
-    axes[0].set_ylabel("Latent dim 2")
+    axes[0].set_ylabel("Latent dim 2", fontsize=label_fontsize)
     fig.legend(
         handles=legend_handles,
         loc="upper center",
         bbox_to_anchor=(0.5, 1.08),
         ncol=len(legend_handles) // 2 + 1,
         frameon=False,
+        fontsize=legend_fontsize,
     )
 
     fig.suptitle(
         f"OT Transport: digit {source_label} → digit {target_label} "
         f"({n_highlight} points), across γ",
         y=1.15,
+        fontsize=suptitle_fontsize,
     )
 
     if save:
@@ -268,6 +282,156 @@ def plot_barycentric_geometry_vs_gamma_dim2(
     return fig
 
 
+
+def plot_single_point_transport(
+    training_data,
+    model,
+    source_label,
+    target_label,
+    gamma,
+    point_index=0,          # which source point (by index, after encoding) to highlight
+    save_dir="figures/plots",
+    save=True,
+    point_size=12,
+    alpha=0.6,
+    highlight_size=80,
+    background_frac=1.0,
+    clip_quantile=0.1,
+    title_fontsize=14,
+    label_fontsize=14,
+    legend_fontsize=11,
+    tick_fontsize=11,
+    figsize=(6, 6),
+):
+    """
+    Visualize the optimal-transport mapping for a single source point:
+    background clouds for the source and target distributions, one
+    highlighted source point, and its barycentric-projected destination
+    E[y|x*], connected by a single transport line.
+    """
+    model_name = "ae_best_model_bo_2"
+    pickle_filename = f"data/{model_name}_ot_data.pkl"
+    with open(pickle_filename, "rb") as f:
+        model_transport_data = pickle.load(f)
+ 
+    os.makedirs(save_dir, exist_ok=True)
+    n_points = MAX_POINTS
+    label = f"source_{source_label}_target_{target_label}"
+ 
+    if gamma not in model_transport_data:
+        raise ValueError(
+            f"gamma={gamma} not found. Available: {sorted(model_transport_data.keys())}"
+        )
+ 
+    def encode_label(target_class, n_points=n_points, seed=34):
+        rng = np.random.default_rng(seed)
+        indices = rng.permutation(len(training_data))
+        xs = []
+        for i in indices:
+            img, lbl = training_data[i]
+            if lbl == target_class:
+                xs.append(img.numpy())
+            if len(xs) >= n_points:
+                break
+        x = jnp.array(xs).reshape(len(xs), -1)
+        _, z = jax.vmap(model)(x)
+        return np.array(z)
+ 
+    latent_source = encode_label(source_label)
+    latent_target = encode_label(target_label)
+ 
+    # subsample background clouds for clarity
+    rng = np.random.default_rng(0)
+    if background_frac < 1.0:
+        n_src_show = max(1, int(latent_source.shape[0] * background_frac))
+        n_tgt_show = max(1, int(latent_target.shape[0] * background_frac))
+        src_bg_idx = rng.choice(latent_source.shape[0], n_src_show, replace=False)
+        tgt_bg_idx = rng.choice(latent_target.shape[0], n_tgt_show, replace=False)
+    else:
+        src_bg_idx = np.arange(latent_source.shape[0])
+        tgt_bg_idx = np.arange(latent_target.shape[0])
+ 
+    src_bg = latent_source[src_bg_idx]
+    tgt_bg = latent_target[tgt_bg_idx]
+ 
+    # robust axis limits (trim outliers)
+    all_pts = np.vstack([latent_source, latent_target])
+    lo = np.quantile(all_pts, clip_quantile, axis=0)
+    hi = np.quantile(all_pts, 1 - clip_quantile, axis=0)
+    pad = 0.1 * (hi - lo)
+    xlim = (lo[0] - pad[0], hi[0] + pad[0])
+    ylim = (lo[1] - pad[1], hi[1] + pad[1])
+ 
+    P = model_transport_data[gamma][label]["P"]
+    n_tgt_P = P.shape[1]
+    latent_target_P = latent_target[:n_tgt_P]
+ 
+    p_y_given_x = P / P.sum(axis=1, keepdims=True)
+    expected_target = p_y_given_x @ latent_target_P  # (n_src, 2)
+ 
+    if point_index >= latent_source.shape[0]:
+        raise ValueError(
+            f"point_index={point_index} out of range (0 to {latent_source.shape[0] - 1})"
+        )
+ 
+    src_pt = latent_source[point_index]
+    tgt_pt = expected_target[point_index]
+ 
+    fig, ax = plt.subplots(figsize=figsize)
+ 
+    # background clouds (faint, subsampled)
+    ax.scatter(
+        src_bg[:, 0], src_bg[:, 1],
+        c="tab:blue", marker="o", s=point_size, alpha=alpha * 0.25,
+        edgecolors="none",
+    )
+    ax.scatter(
+        tgt_bg[:, 0], tgt_bg[:, 1],
+        c="tab:orange", marker="o", s=point_size, alpha=alpha * 0.25,
+        edgecolors="none",
+    )
+ 
+    # single transport line
+    ax.plot(
+        [src_pt[0], tgt_pt[0]],
+        [src_pt[1], tgt_pt[1]],
+        color="gray", linewidth=1.0, alpha=0.9, zorder=2,
+    )
+ 
+    # the one highlighted source point and its barycentric projection
+    ax.scatter(
+        src_pt[0], src_pt[1],
+        c="tab:blue", marker="o", s=highlight_size,
+        edgecolors="black", linewidths=1.0, zorder=3,
+    )
+    ax.scatter(
+        tgt_pt[0], tgt_pt[1],
+        c="tab:orange", marker="o", s=highlight_size,
+        edgecolors="black", linewidths=1.0, zorder=3,
+    )
+ 
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+ 
+    fig.patch.set_facecolor("white")
+    ax.patch.set_facecolor("white")
+    fig.tight_layout(pad=0)
+ 
+    if save:
+        fname = f"transport_single_point_{source_label}_to_{target_label}_gamma_{gamma:.4f}.png"
+        plt.savefig(
+            f"{save_dir}/{fname}", dpi=300, bbox_inches="tight",
+            pad_inches=0, facecolor="white",
+        )
+ 
+    return fig
+ 
 def plot_reconstruction(training_data, model, n_examples=10):
     xs = [img.numpy() for img, _ in list(training_data)[:n_examples]]
     x = jnp.array(xs)
@@ -625,6 +789,85 @@ def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/
                 dpi=300, bbox_inches="tight"
             )
         plt.close()
+def plot_mmd_vs_dim(
+    df: str,
+    gamma_value: 0.001,
+    save_path: str = "figures/plots/mmd_vs_dim_gamma.png",
+    mode: str = "averaged",  # "averaged" or "per_pair"
+):
+ 
+    # filter to the requested gamma (use isclose to avoid float-equality issues)
+    subset = df[abs(df["gamma"] - gamma_value) < 1e-12].copy()
+    if subset.empty:
+        raise ValueError(f"No rows found for gamma={gamma_value} in {csv_path}")
+ 
+    fig, ax = plt.subplots(figsize=(6, 4.5))
+ 
+    if mode == "averaged":
+        # average mmd_latent / mmd_image across all source/target pairs per dim
+        grouped = (
+            subset.groupby("latent_dim")[["mmd_latent", "mmd_image"]]
+            .mean()
+            .sort_index()
+        )
+ 
+        ax.plot(
+            grouped.index,
+            grouped["mmd_latent"],
+            marker="o",
+            color="tab:blue",
+            label="Latent MMD",
+        )
+        ax.plot(
+            grouped.index,
+            grouped["mmd_image"],
+            marker="s",
+            color="tab:orange",
+            label="Image MMD",
+        )
+ 
+    elif mode == "per_pair":
+        # one line per (source_label, target_label) pair, two metrics each
+        pairs = subset[["source_label", "target_label"]].drop_duplicates()
+        cmap_latent = plt.cm.Blues
+        cmap_image = plt.cm.Oranges
+        n = len(pairs)
+ 
+        for i, (_, row) in enumerate(pairs.iterrows()):
+            s, t = row["source_label"], row["target_label"]
+            pair_data = subset[
+                (subset["source_label"] == s) & (subset["target_label"] == t)
+            ].sort_values("latent_dim")
+ 
+            shade = 0.4 + 0.5 * (i / max(n - 1, 1))  # vary shade across pairs
+            ax.plot(
+                pair_data["latent_dim"],
+                pair_data["mmd_latent"],
+                marker="o",
+                color=cmap_latent(shade),
+                label=f"Latent MMD ({s}→{t})",
+            )
+            ax.plot(
+                pair_data["latent_dim"],
+                pair_data["mmd_image"],
+                marker="s",
+                linestyle="--",
+                color=cmap_image(shade),
+                label=f"Image MMD ({s}→{t})",
+            )
+    else:
+        raise ValueError("mode must be 'averaged' or 'per_pair'")
+ 
+    ax.set_xlabel("Latent dimension")
+    ax.set_ylabel("MMD")
+    ax.set_title(f"MMD vs. latent dimension (γ = {gamma_value})")
+    ax.set_xticks(sorted(subset["latent_dim"].unique()))
+    ax.legend(loc="best", fontsize=8 if mode == "per_pair" else 10)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+ 
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    return fig
 
 
    
@@ -785,77 +1028,135 @@ def plot_latent_space_dim(model, dim, x_sub, labels_sub, point_size=4, alpha=0.6
     plt.show()
 
 
+def select_best_gamma_ttest(df, gammas, alpha=0.05, verbose=True):
+    """
+    Select the preferred gamma using sequential Welch's t-tests on pooled
+    per-row mmd_latent values (pooled across all rows -- source/target pairs
+    and latent dimensions -- at each gamma).
+ 
+    Walk gammas in ascending order. Start with `selected = gammas[0]`.
+    For each subsequent candidate gamma g:
+        - Run Welch's t-test between selected's pooled mmd_latent values
+          and candidate's pooled mmd_latent values.
+        - If NOT significant (p >= alpha): prefer the larger gamma
+          (no meaningful cost in MMD, so take the cheaper/larger one) ->
+          selected = g.
+        - If significant: only move to g if g's mean MMD is actually lower
+          (a real improvement) -> selected = g. Otherwise keep `selected`
+          and continue comparing future gammas against it.
+ 
+    Returns
+    -------
+    selected_gamma : float
+    log : list of dict
+        One entry per pairwise comparison made, for inspection/reporting.
+    """
+    gammas = sorted(gammas)
+    samples = {g: df.loc[df["gamma"] == g, "mmd_image"].dropna().values for g in gammas}
+ 
+    selected = gammas[0]
+    log = []
+ 
+    for g in gammas[1:]:
+        a = samples[selected]
+        b = samples[g]
+ 
+        if len(a) < 2 or len(b) < 2:
+            t_stat, p_val = np.nan, np.nan
+            significant = False
+        else:
+            t_stat, p_val = stats.ttest_ind(a, b, equal_var=False)  # Welch's t-test
+            significant = p_val < alpha
+ 
+        mean_selected = np.mean(a) if len(a) else np.nan
+        mean_candidate = np.mean(b) if len(b) else np.nan
+ 
+        if not significant:
+            decision = f"not significant (p={p_val:.4f}) -> prefer larger gamma {g}"
+            selected = g
+        else:
+            if mean_candidate < mean_selected:
+                decision = (
+                    f"significant (p={p_val:.4f}), candidate mean lower "
+                    f"({mean_candidate:.4f} < {mean_selected:.4f}) -> move to {g}"
+                )
+                selected = g
+            else:
+                decision = (
+                    f"significant (p={p_val:.4f}), candidate mean not lower "
+                    f"({mean_candidate:.4f} >= {mean_selected:.4f}) -> keep {selected}"
+                )
+ 
+        log.append({
+            "candidate": g,
+            "t_stat": t_stat,
+            "p_value": p_val,
+            "significant": significant,
+            "mean_selected_before": mean_selected,
+            "mean_candidate": mean_candidate,
+            "decision": decision,
+        })
+ 
+        if verbose:
+            print(f"vs γ={g}: {decision}")
+ 
+    return selected, log
+ 
+ 
 def plot_mmd_vs_gamma(
     df=None,
     csv_path="data/evaluation_summary.csv",
     save_dir="figures/plots",
     save=True,
-    by_dim=True,
+    alpha=0.05,
 ):
+    """
+    Plot latent MMD vs gamma, one line per latent dimension, with a single
+    vertical line marking the globally selected optimal gamma (via sequential
+    Welch's t-tests pooled across all dimensions and source/target pairs).
+    """
     if df is None:
         df = pd.read_csv(csv_path)
     os.makedirs(save_dir, exist_ok=True)
-
     gammas = sorted(df["gamma"].unique())
-
-    if by_dim:
-        dims = sorted(df["latent_dim"].unique())
-        _, ax = plt.subplots(figsize=(9, 6))
-        cmap = plt.cm.viridis(np.linspace(0, 1, len(dims)))
-
-        for color, d in zip(cmap, dims):
-            sub = df[df["latent_dim"] == d]
-            means = [sub.loc[sub["gamma"] == g, "mmd_latent"].mean() for g in gammas]
-
-            ax.plot(
-                gammas, means,
-                "o-", linewidth=2, markersize=5,
-                color=color, alpha=0.9,
-                label=f"latent_dim={d}"
-            )
-
-            best_i = int(np.nanargmin(means))
-            ax.scatter(gammas[best_i], means[best_i], color=color, edgecolor="black",
-                       zorder=5, s=80, marker="*")
-
-        ax.set_xscale("log")
-        ax.set_xlabel(r"$\gamma$", fontsize=13)
-        ax.set_ylabel("Latent MMD", fontsize=13)
-        ax.set_title(r"Latent MMD vs $\gamma$ by Latent Dimension", fontsize=14)
-        ax.grid(True, alpha=0.3)
-        ax.legend()
-        plt.tight_layout()
-        fname = "mmd_vs_gamma_by_dim.png"
-
-    else:
-        means = [df.loc[df["gamma"] == g, "mmd_latent"].mean() for g in gammas]
-        best_idx = int(np.argmin(means))
-        best_gamma = gammas[best_idx]
-
-        _, ax = plt.subplots(figsize=(8, 5))
+    dims = sorted(df["latent_dim"].unique())
+ 
+    best_gamma, ttest_log = select_best_gamma_ttest(df, gammas, alpha=alpha)
+    best_mmd_pooled = df.loc[df["gamma"] == best_gamma, "mmd_image"].mean()
+ 
+    _, ax = plt.subplots(figsize=(9, 6))
+    cmap = plt.cm.viridis(np.linspace(0, 1, len(dims)))
+ 
+    for color, d in zip(cmap, dims):
+        sub = df[df["latent_dim"] == d]
+        means = [sub.loc[sub["gamma"] == g, "mmd_image"].mean() for g in gammas]
         ax.plot(
             gammas, means,
-            "o-", linewidth=2, markersize=6,
-            color="steelblue", alpha=0.9,
-            label="mean MMD"
+            "o-", linewidth=2, markersize=5,
+            color=color, alpha=0.9,
+            label=f"latent_dim={d}",
         )
-        ax.axvline(best_gamma, color="tomato", linestyle="--", linewidth=1.5,
-                   label=f"best γ={best_gamma:.4f} (min mean MMD)")
-        ax.set_xscale("log")
-        ax.set_xlabel(r"$\gamma$", fontsize=13)
-        ax.set_ylabel("Latent MMD", fontsize=13)
-        ax.set_title(r"Average Latent MMD vs $\gamma$", fontsize=14)
-        ax.grid(True, alpha=0.3)
-        ax.legend()
-        plt.tight_layout()
-        fname = "mmd_vs_gamma_avg.png"
-
-        print(f"Best γ: {best_gamma:.4f}  →  MMD = {means[best_idx]:.4f}")
-
+ 
+    ax.axvline(
+        best_gamma, color="tomato", linestyle="--", linewidth=1.8, zorder=4,
+        label=f"selected γ={best_gamma:.4g} (t-test, α={alpha})",
+    )
+ 
+    ax.set_xscale("log")
+    ax.set_xlabel(r"$\gamma$", fontsize=13)
+    ax.set_ylabel("Image MMD", fontsize=13)
+    ax.set_title(r"Image MMD vs $\gamma$ by Latent Dimension", fontsize=14)
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    plt.tight_layout()
+ 
+    fname = "mmd_vs_gamma_by_dim.png"
+    print(f"Selected γ: {best_gamma:.4g}  ->  pooled mean MMD = {best_mmd_pooled:.4f}")
+ 
     if save:
         plt.savefig(f"{save_dir}/{fname}", dpi=300, bbox_inches="tight")
     plt.show()
-
+ 
 
 def plot_interpolation_paths_across_dims(
     dims=None,
@@ -1493,13 +1794,25 @@ def fig_1_plot_boxplot_mmd_per_gamma(summary_df, save_dir="figures/rapport"):
 
 if __name__ == "__main__":
     summary_df = pd.read_csv("data/evaluation_summary.csv")
-    # training_data,_ = getData()
-    # model = load_with_hyperparams("ae_best_model_bo_2")
-    # plot_barycentric_geometry_vs_gamma_dim2(training_data,model=model,source_label=0,target_label=1)
+
+
+
+    training_data,_ = getData()
+    model = load_with_hyperparams("ae_best_model_bo_2")
+
+    plot_single_point_transport(
+    training_data,
+    model,
+    2,
+    6,
+    0.001)
+    plot_barycentric_geometry_vs_gamma_dim2(training_data,model=model,source_label=0,target_label=1)
     # pca_visualize_for_high_dimension(training_data,model=load_with_hyperparams("ae_best_model_bo_4"))
     # plot_mmd_vs_gamma(df=summary_df)
-    fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
-    fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
-    fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
-    fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
-    fig_4_plot_gamma_vs_mmd(summary_df=summary_df)
+    # fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
+    # fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
+    # fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    # fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
+    # fig_4_plot_gamma_vs_mmd(summary_df=summary_df)
+    # fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    
