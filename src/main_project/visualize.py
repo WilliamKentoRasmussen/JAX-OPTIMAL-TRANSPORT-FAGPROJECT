@@ -1812,7 +1812,7 @@ if __name__ == "__main__":
     # fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
     # fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
     # fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
-    # fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
+    fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
     # fig_4_plot_gamma_vs_mmd(summary_df=summary_df)
     # fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
     
