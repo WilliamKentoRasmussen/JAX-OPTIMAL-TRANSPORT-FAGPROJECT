@@ -105,7 +105,7 @@ def plot_barycentric_geometry_vs_gamma_dim2(
     model,
     source_label,
     target_label,
-    save_dir="figures/plots",
+    save_dir="figures/rapport",
     save=True,
     point_size=12,
     alpha=0.6,
@@ -145,11 +145,13 @@ def plot_barycentric_geometry_vs_gamma_dim2(
 
     for ax, gamma in zip(axes, gammas):
         P = model_transport_data[gamma][label]["P"]
-
-        # Vectorized row-normalization, matching get_probability_y_given_x exactly
+        
+        n_tgt_P = P.shape[1]  # how many target points P was built with
+        latent_target_P = latent_target[:n_tgt_P]  # trim to match
+        
         p_y_given_x = P / P.sum(axis=1, keepdims=True)
-        expected_target = p_y_given_x @ latent_target
-
+        expected_target = p_y_given_x @ latent_target_P  # now (n_src, 2)
+        
         ax.scatter(
             latent_source[:, 0], latent_source[:, 1],
             c="gray", marker="x", s=point_size, alpha=alpha * 0.7,
@@ -168,6 +170,10 @@ def plot_barycentric_geometry_vs_gamma_dim2(
 
         ax.set_title(f"γ={gamma:.4f}")
         ax.set_xlabel("Latent dim 1")
+
+    plt.savefig(f"{save_dir}/plot_barycentric_geometry_vs_gamma_dim2.png", dpi=300, bbox_inches="tight")
+
+
 
 
 def plot_reconstruction(training_data, model, n_examples=10):
@@ -526,6 +532,87 @@ def fig_3_plot_mmd_heatmaps_individual(summary_df, save=True, save_dir="figures/
         if save:
             plt.savefig(
                 f"{save_dir}/fig_3_latent_heatmaps_dim_{latent_dim}.png",
+                dpi=300, bbox_inches="tight"
+            )
+        plt.close()
+
+
+   
+def fig_3_plot_mmd_heatmaps_individual_selfmade(summary_df, save=True, save_dir="figures/rapport"):
+    """Per-dim figure: MMD Latent (left) + Wasserstein Latent (right) at a fixed gamma,
+    full 10×10 asymmetric heatmap of all 90 directed pairs."""
+    os.makedirs(save_dir, exist_ok=True)
+    labels = LABELS  # e.g. [0,1,...,9]
+    df = summary_df[summary_df["gamma"] == OPTIMAL_GAMMA]
+    latent_dims = sorted(df["latent_dim"].unique())
+
+    for latent_dim in latent_dims:
+        model_df = df[df["latent_dim"] == latent_dim]
+
+        mmd_matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
+        wass_matrix = pd.DataFrame(np.nan, index=labels, columns=labels)
+
+        mmd_means = model_df.groupby(["source_label", "target_label"])["mmd_latent"].mean()
+        wass_means = model_df.groupby(["source_label", "target_label"])["wasserstein_distance_latent"].mean()
+
+        for (src, tgt), val in mmd_means.items():
+            mmd_matrix.at[src, tgt] = val  # .at avoids label/loc ambiguity
+
+        for (src, tgt), val in wass_means.items():
+            wass_matrix.at[src, tgt] = val
+
+        fig, (ax_mmd, ax_wass) = plt.subplots(1, 2, figsize=(18, 8))
+
+        # --- MMD Latent ---
+        mmd_vals = mmd_matrix.values.astype(float)
+
+        im1 = ax_mmd.imshow(mmd_vals, cmap="viridis_r")
+        ax_mmd.set_xticks(range(len(labels)))
+        ax_mmd.set_xticklabels(labels)
+        ax_mmd.set_yticks(range(len(labels)))
+        ax_mmd.set_yticklabels(labels)
+        ax_mmd.set_xlabel("Target Label")
+        ax_mmd.set_ylabel("Source Label")
+        ax_mmd.set_title(f"MMD Latent")
+        plt.colorbar(im1, ax=ax_mmd, label="MMD Latent")
+
+        mmd_mean = np.nanmean(mmd_vals)
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                val = mmd_matrix.iloc[i, j]
+                if not np.isnan(val):
+                    ax_mmd.text(j, i, f"{val:.4f}", ha="center", va="center",
+                                fontsize=6, color="white" if val > mmd_mean else "black")
+
+        # --- Wasserstein Latent ---
+        wass_vals = wass_matrix.values.astype(float)
+        im2 = ax_wass.imshow(wass_vals, cmap="viridis_r")
+        ax_wass.set_xticks(range(len(labels)))
+        ax_wass.set_xticklabels(labels)
+        ax_wass.set_yticks(range(len(labels)))
+        ax_wass.set_yticklabels(labels)
+        ax_wass.set_xlabel("Target Label")
+        ax_wass.set_ylabel("Source Label")
+        ax_wass.set_title(f"Wasserstein Latent")
+        plt.colorbar(im2, ax=ax_wass, label="Wasserstein Distance (Latent)")
+
+        wass_mean = np.nanmean(wass_vals)
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                val = wass_matrix.iloc[i, j]
+                if not np.isnan(val):
+                    ax_wass.text(j, i, f"{val:.4f}", ha="center", va="center",
+                                 fontsize=6, color="white" if val > wass_mean else "black")
+
+        fig.suptitle(
+            f"Latent Space Distance Heatmaps — Latent Dim = {latent_dim}  (γ = {OPTIMAL_GAMMA})",
+            fontsize=14
+        )
+        plt.tight_layout()
+
+        if save:
+            plt.savefig(
+                f"{save_dir}/fig_3_latent_heatmaps_dim_{latent_dim}_selfmade.png",
                 dpi=300, bbox_inches="tight"
             )
         plt.close()

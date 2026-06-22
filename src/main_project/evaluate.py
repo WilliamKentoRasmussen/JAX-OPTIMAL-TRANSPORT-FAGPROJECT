@@ -173,7 +173,7 @@ def evaluate_by_model_in_latent_space(sinkhorn_data):
     return mmd, wasserstein_distance
 
 
-def wasserstein_distance_subsampled(source, target, max_points=500, n_seeds=5):
+def wasserstein_distance_subsampled(source, target, max_points=250, n_seeds=5):
     source = np.asarray(source)
     target = np.asarray(target)
     n = min(source.shape[0], target.shape[0], max_points)
