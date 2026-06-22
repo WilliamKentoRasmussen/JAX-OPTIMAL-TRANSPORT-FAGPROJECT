@@ -16,11 +16,6 @@ def getDataloader(data, batch_size=64) -> DataLoader:
     return dataloader
 
 
-if __name__ == "__main__":
-    training_data, test_data = getData()
-    train_dataloader, test_dataloader = getDataloader(training_data), getDataloader(test_data)
-    dummy_x, dummy_y = next(iter(train_dataloader))
-    print(dummy_x.size(), dummy_y.size())
 
 
 # class MyDataset(Dataset):
@@ -43,6 +38,6 @@ if __name__ == "__main__":
 #     print("Preprocessing data...")
 #     dataset = MyDataset(data_path)
 #     dataset.preprocess(output_folder)
-if __name__ == "main":
+if __name__ == "__main__":
     training_data, test_data = getData()
     print(len(training_data), len(test_data))

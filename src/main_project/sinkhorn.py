@@ -15,7 +15,7 @@ import re
 import time
 
 from main_project.model import AEv2
-from main_project.utils import load
+from main_project.utils import load,load_with_hyperparams
 from main_project.data import getData, getDataloader
 from main_project.environment import (
     GAMMA,
@@ -253,9 +253,9 @@ def main():
     #warmup_jax(n=MAX_POINTS, dim=MODELS_DIM[0]) run only when interested in running time
     for dim in MODELS_DIM:
         warmup_jax(n=MAX_POINTS, dim=dim)
-        model_name = f"ae_best_model_{dim}"
+        model_name = f"ae_best_model_bo_{dim}"
         for gamma in GAMMA:
-            model = load(model_name)
+            model = load_with_hyperparams(model_name)
             latent_source, latent_target, _, _, _, _, iter, _ = run_sinkhorn_by_model(model=model, gamma=gamma)
             data.append((model_name, gamma, iter))
         start = time.perf_counter()
