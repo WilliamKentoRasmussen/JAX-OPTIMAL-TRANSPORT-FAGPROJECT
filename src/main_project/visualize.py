@@ -20,6 +20,7 @@ from main_project.data import getData  # fixed
 from main_project.environment import LABELS, MAX_POINTS, MODELS_DIM, OPTIMAL_GAMMA
 from main_project.data import getData
 import os
+from scipy.stats import iqr
 
 labels_map = {i: str(i) for i in range(10)}
 # style.py
@@ -47,7 +48,174 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import stats
- 
+
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+
+def select_best_gamma_ttest(df, gammas, metric="mmd_latent", alpha=0.2, verbose=True):
+    """
+    Select the preferred gamma using sequential Welch's t-tests on pooled
+    per-row metric values (pooled across all rows -- source/target pairs
+    and latent dimensions -- at each gamma).
+
+    Walk gammas in ascending order. Start with `selected = gammas[0]`.
+    For each subsequent candidate gamma g:
+        - Run Welch's t-test between selected's pooled metric values
+          and candidate's pooled metric values.
+        - If NOT significant (p >= alpha): prefer the larger gamma
+          (no meaningful cost in metric, so take the cheaper/larger one) ->
+          selected = g.
+        - If significant: only move to g if g's mean metric is actually lower
+          (a real improvement) -> selected = g. Otherwise keep `selected`
+          and continue comparing future gammas against it.
+
+    Returns
+    -------
+    selected_gamma : float
+    log : list of dict
+        One entry per pairwise comparison made, for inspection/reporting.
+    """
+    gammas = sorted(gammas)
+    samples = {g: df.loc[df["gamma"] == g, metric].dropna().values for g in gammas}
+
+    selected = gammas[0]
+    log = []
+
+    for g in gammas[1:]:
+        a = samples[selected]
+        b = samples[g]
+
+        if len(a) < 2 or len(b) < 2:
+            t_stat, p_val = np.nan, np.nan
+            significant = False
+        else:
+            t_stat, p_val = stats.ttest_ind(a, b, equal_var=False)  # Welch's t-test
+            significant = p_val < alpha
+
+        mean_selected = np.mean(a) if len(a) else np.nan
+        mean_candidate = np.mean(b) if len(b) else np.nan
+
+        if not significant:
+            decision = f"not significant (p={p_val:.4f}) -> prefer larger gamma {g}"
+            selected = g
+        else:
+            if mean_candidate < mean_selected:
+                decision = (
+                    f"significant (p={p_val:.4f}), candidate mean lower "
+                    f"({mean_candidate:.4f} < {mean_selected:.4f}) -> move to {g}"
+                )
+                selected = g
+            else:
+                decision = (
+                    f"significant (p={p_val:.4f}), candidate mean not lower "
+                    f"({mean_candidate:.4f} >= {mean_selected:.4f}) -> keep {selected}"
+                )
+
+        log.append({
+            "candidate": g,
+            "t_stat": t_stat,
+            "p_value": p_val,
+            "significant": significant,
+            "mean_selected_before": mean_selected,
+            "mean_candidate": mean_candidate,
+            "decision": decision,
+        })
+
+        if verbose:
+            print(f"vs γ={g}: {decision}")
+
+    return selected, log
+def table_mmd_image_vs_gamma(summary_df, save_dir="figures/rapport", save_csv=True, decimals=4):
+    """
+    Computes the mean and 95% confidence interval of image MMD (mmd_image)
+    for each gamma value, averaged across all latent dimensions and
+    source-target pairs at that gamma. Uses the same normal-approximation
+    CI as the rest of the codebase: 1.96 * std(ddof=1) / sqrt(n).
+
+    Returns a DataFrame and writes:
+      - a .csv with the raw mean/lower/upper/n columns
+      - a .tex file with a ready-to-paste LaTeX table, formatted as
+        "mean [lower, upper]" to match the style of
+        Table~\\ref{tab:ae_quantitative_metrics} elsewhere in the report.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    gammas = sorted(summary_df["gamma"].unique())
+
+    rows = []
+    for gamma in gammas:
+        values = summary_df.loc[summary_df["gamma"] == gamma, "mmd_image"].dropna().values
+        n = len(values)
+
+        if n == 0:
+            rows.append({"gamma": gamma, "mean": np.nan, "lower": np.nan, "upper": np.nan, "n": 0})
+            continue
+
+        mean = np.mean(values)
+
+        if n > 1:
+            std = np.std(values, ddof=1)
+            ci = 1.96 * std / np.sqrt(n)
+        else:
+            ci = 0.0
+
+        rows.append({
+            "gamma": gamma,
+            "mean": mean,
+            "lower": mean - ci,
+            "upper": mean + ci,
+            "n": n,
+        })
+
+    result_df = pd.DataFrame(rows)
+
+    if save_csv:
+        result_df.to_csv(f"{save_dir}/table_mmd_image_vs_gamma.csv", index=False)
+
+    # --- build the LaTeX table, formatted as "mean [lower, upper]" ---
+    fmt = f"{{:.{decimals}f}}"
+    latex_rows = []
+    for _, r in result_df.iterrows():
+        if np.isnan(r["mean"]):
+            latex_rows.append(f"    {r['gamma']:g} & --- & {int(r['n'])} \\\\")
+            continue
+        mean_str = fmt.format(r["mean"])
+        lower_str = fmt.format(r["lower"])
+        upper_str = fmt.format(r["upper"])
+        latex_rows.append(
+            f"    {r['gamma']:g} & ${mean_str}~[{lower_str}, {upper_str}]$ & {int(r['n'])} \\\\"
+        )
+
+    latex_table = (
+        "\\begin{table}[ht]\n"
+        "\\centering\n"
+        "\\caption{Mean image MMD as a function of $\\gamma$, averaged across all "
+        "latent dimensions and source-target pairs. Values are reported as mean "
+        "[95\\% confidence interval], computed as "
+        "$\\left(\\bar{x} \\pm 1.96 \\cdot \\frac{s}{\\sqrt{n}}\\right)$.}\n"
+        "\\label{tab:mmd_image_vs_gamma}\n"
+        "\\begin{tabular}{ccc}\n"
+        "    \\toprule\n"
+        "    $\\gamma$ & Image MMD & $n$ \\\\\n"
+        "    \\midrule\n"
+        + "\n".join(latex_rows) + "\n"
+        "    \\bottomrule\n"
+        "\\end{tabular}\n"
+        "\\end{table}\n"
+    )
+
+    tex_path = f"{save_dir}/table_mmd_image_vs_gamma.tex"
+    with open(tex_path, "w") as f:
+        f.write(latex_table)
+
+    print(latex_table)
+    print(f"Saved → {tex_path}")
+    if save_csv:
+        print(f"Saved → {save_dir}/table_mmd_image_vs_gamma.csv")
+
+    return result_df
  
 def plot_transport_images(original_images, expected_target_images, n=5, title="Transport plot"):
     fig, axes = plt.subplots(2, n, figsize=(2 * n, 4))
@@ -105,224 +273,54 @@ def plot_latent_clusters(training_data, model, max_points=20000, point_size=4, a
     plt.tight_layout()
     plt.show()
 
-def plot_barycentric_geometry_vs_gamma_dim2(
-    training_data,
-    model,
-    source_label,
-    target_label,
-    save_dir="figures/plots",
-    save=True,
-    point_size=12,
-    alpha=0.6,
-    n_highlight=35,         # how many source points to draw transport lines for
-    highlight_size=80,      # marker size for highlighted points
-    background_frac=1.0,    # fraction of background cloud points to plot (0-1)
-    clip_quantile=0.1,     # trim this fraction from each tail when setting axis limits
-    mean_marker_size=100,   # marker size for the target distribution mean star
-    title_fontsize=16,
-    label_fontsize=16,
-    legend_fontsize=16,
-    suptitle_fontsize=16,
-    tick_fontsize=11
-):
-    model_name = "ae_best_model_bo_2"
-    pickle_filename = f"data/{model_name}_ot_data.pkl"
-    with open(pickle_filename, "rb") as f:
-        model_transport_data = pickle.load(f)
-
-    os.makedirs(save_dir, exist_ok=True)
-    n_points = MAX_POINTS
-    label = f"source_{source_label}_target_{target_label}"
-    gammas = sorted(model_transport_data.keys())
-
-    def encode_label(target_class, n_points=n_points, seed=34):
-        rng = np.random.default_rng(seed)
-        indices = rng.permutation(len(training_data))
-        xs = []
-        for i in indices:
-            img, lbl = training_data[i]
-            if lbl == target_class:
-                xs.append(img.numpy())
-            if len(xs) >= n_points:
-                break
-        x = jnp.array(xs).reshape(len(xs), -1)
-        _, z = jax.vmap(model)(x)
-        return np.array(z)
-
-    latent_source = encode_label(source_label)
-    latent_target = encode_label(target_label)
-
-    # --- mean of the full target distribution (computed once, fixed across gammas) ---
-    target_mean = latent_target.mean(axis=0)
-
-    # --- subsample background clouds for clarity ---
-    rng = np.random.default_rng(0)
-    if background_frac < 1.0:
-        n_src_show = max(1, int(latent_source.shape[0] * background_frac))
-        n_tgt_show = max(1, int(latent_target.shape[0] * background_frac))
-        src_bg_idx = rng.choice(latent_source.shape[0], n_src_show, replace=False)
-        tgt_bg_idx = rng.choice(latent_target.shape[0], n_tgt_show, replace=False)
-    else:
-        src_bg_idx = np.arange(latent_source.shape[0])
-        tgt_bg_idx = np.arange(latent_target.shape[0])
-
-    src_bg = latent_source[src_bg_idx]
-    tgt_bg = latent_target[tgt_bg_idx]
-
-    # --- compute robust axis limits (trim outliers) ---
-    all_pts = np.vstack([latent_source, latent_target])
-    lo = np.quantile(all_pts, clip_quantile, axis=0)
-    hi = np.quantile(all_pts, 1 - clip_quantile, axis=0)
-    pad = 0.1 * (hi - lo)
-    xlim = (lo[0] - pad[0], hi[0] + pad[0])
-    ylim = (lo[1] - pad[1], hi[1] + pad[1])
-
-    n_cols = len(gammas)
-    fig, axes = plt.subplots(1, n_cols, figsize=(5 * n_cols, 5), sharex=True, sharey=True)
-    if n_cols == 1:
-        axes = [axes]
-
-    # define colors/labels once so every subplot is consistent and we can
-    # build a single shared legend afterwards
-    legend_handles = [
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue",
-                    markersize=8, alpha=0.5, label=f"Digit {source_label} (source distribution)"),
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:orange",
-                    markersize=8, alpha=0.5, label=f"Digit {target_label} (target distribution)"),
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue",
-                    markeredgecolor="black", markersize=10, label=f"Source Points to be Transported"),
-        plt.Line2D([0], [0], marker="^", color="w", markerfacecolor="tab:green",
-                    markeredgecolor="black", markersize=10, label="Transported Points in Target "),
-        plt.Line2D([0], [0], color="gray", linewidth=1.2, label="Transport map"),
-        plt.Line2D([0], [0], marker="*", color="w", markerfacecolor="red",
-                    markeredgecolor="black", markersize=16, label=f"Mean of Digit {target_label} distribution"),
-    ]
-
-    for ax, gamma in zip(axes, gammas):
-        P = model_transport_data[gamma][label]["P"]
-        n_tgt_P = P.shape[1]
-        latent_target_P = latent_target[:n_tgt_P]
-
-        p_y_given_x = P / P.sum(axis=1, keepdims=True)
-        expected_target = p_y_given_x @ latent_target_P  # (n_src, 2)
-
-        # --- background clouds (faint, subsampled) ---
-        ax.scatter(
-            src_bg[:, 0], src_bg[:, 1],
-            c="tab:blue", marker="o", s=point_size, alpha=alpha * 0.25,
-            edgecolors="none",
-        )
-        ax.scatter(
-            tgt_bg[:, 0], tgt_bg[:, 1],
-            c="tab:orange", marker="o", s=point_size, alpha=alpha * 0.25,
-            edgecolors="none",
-        )
-
-        # --- highlighted subset + connecting lines ---
-        n_hl = min(n_highlight, latent_source.shape[0])
-        idx = np.arange(n_hl)
-
-        src_hl = latent_source[idx]
-        tgt_hl = expected_target[idx]
-
-        for i in range(n_hl):
-            ax.plot(
-                [src_hl[i, 0], tgt_hl[i, 0]],
-                [src_hl[i, 1], tgt_hl[i, 1]],
-                color="gray", linewidth=0.8, alpha=0.8, zorder=2,
-            )
-
-        ax.scatter(
-            src_hl[:, 0], src_hl[:, 1],
-            c="tab:blue", marker="o", s=highlight_size,
-            edgecolors="black", linewidths=0.8, zorder=3,
-        )
-        ax.scatter(
-            tgt_hl[:, 0], tgt_hl[:, 1],
-            c="tab:green", marker="^", s=highlight_size,
-            edgecolors="black", linewidths=0.8, zorder=3,
-        )
-
-        # --- mean of the target distribution, as a star, on top of everything ---
-        ax.scatter(
-            target_mean[0], target_mean[1],
-            c="red", marker="*", s=mean_marker_size,
-            edgecolors="black", linewidths=1.0, zorder=4,
-        )
-
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim)
-        ax.set_title(f"γ={gamma:.4f}", fontsize=title_fontsize)
-        ax.set_xlabel("Latent dim 1", fontsize=label_fontsize)
-        ax.tick_params(axis="both", labelsize=tick_fontsize)
-
-    axes[0].set_ylabel("Latent dim 2", fontsize=label_fontsize)
-    fig.legend(
-        handles=legend_handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 1.08),
-        ncol=len(legend_handles) // 2 + 1,
-        frameon=False,
-        fontsize=legend_fontsize,
-    )
-
-    fig.suptitle(
-        f"OT Transport: digit {source_label} → digit {target_label} "
-        f"({n_highlight} points), across γ",
-        y=1.15,
-        fontsize=suptitle_fontsize,
-    )
-
-    if save:
-        plt.savefig(
-            f"{save_dir}/plot_barycentric_geometry_vs_gamma_dim2.png",
-            dpi=300, bbox_inches="tight",
-        )
-
-    return fig
-
-
-
-def plot_single_point_transport(
+def plot_barycentric_projection_explainer(
     training_data,
     model,
     source_label,
     target_label,
     gamma,
-    point_index=0,          # which source point (by index, after encoding) to highlight
+    point_index=0,            # which source point (by index, after encoding) to highlight
+    n_top_targets=8,          # how many of the highest-P_ij target points to draw lines to
     save_dir="figures/plots",
     save=True,
-    point_size=12,
+    point_size=10,
     alpha=0.6,
-    highlight_size=80,
+    highlight_size=90,
+    target_dot_size=70,
+    barycenter_marker_size=140,
     background_frac=1.0,
     clip_quantile=0.1,
     title_fontsize=14,
-    label_fontsize=14,
-    legend_fontsize=11,
+    label_fontsize=13,
+    legend_fontsize=10,
     tick_fontsize=11,
-    figsize=(6, 6),
+    figsize=(6.5, 6.5),
 ):
     """
-    Visualize the optimal-transport mapping for a single source point:
-    background clouds for the source and target distributions, one
-    highlighted source point, and its barycentric-projected destination
-    E[y|x*], connected by a single transport line.
+    Method figure for barycentric projection.
+
+    Unlike `plot_single_point_transport`, which only draws the final
+    transported point T(x_i) = sum_j P_ij y_j / sum_j P_ij as a single
+    endpoint, this figure makes the *weighted-average* construction visible:
+    one highlighted source point x_i, lines to its top-`n_top_targets`
+    coupled target points y_j (line opacity/width scaled by P_ij), and the
+    resulting barycentric projection drawn separately as a star to show it
+    is the P-weighted centroid of those target points -- not one of them.
     """
     model_name = "ae_best_model_bo_2"
     pickle_filename = f"data/{model_name}_ot_data.pkl"
     with open(pickle_filename, "rb") as f:
         model_transport_data = pickle.load(f)
- 
+
     os.makedirs(save_dir, exist_ok=True)
     n_points = MAX_POINTS
     label = f"source_{source_label}_target_{target_label}"
- 
+
     if gamma not in model_transport_data:
         raise ValueError(
             f"gamma={gamma} not found. Available: {sorted(model_transport_data.keys())}"
         )
- 
+
     def encode_label(target_class, n_points=n_points, seed=34):
         rng = np.random.default_rng(seed)
         indices = rng.permutation(len(training_data))
@@ -336,10 +334,10 @@ def plot_single_point_transport(
         x = jnp.array(xs).reshape(len(xs), -1)
         _, z = jax.vmap(model)(x)
         return np.array(z)
- 
+
     latent_source = encode_label(source_label)
     latent_target = encode_label(target_label)
- 
+
     # subsample background clouds for clarity
     rng = np.random.default_rng(0)
     if background_frac < 1.0:
@@ -350,10 +348,10 @@ def plot_single_point_transport(
     else:
         src_bg_idx = np.arange(latent_source.shape[0])
         tgt_bg_idx = np.arange(latent_target.shape[0])
- 
+
     src_bg = latent_source[src_bg_idx]
     tgt_bg = latent_target[tgt_bg_idx]
- 
+
     # robust axis limits (trim outliers)
     all_pts = np.vstack([latent_source, latent_target])
     lo = np.quantile(all_pts, clip_quantile, axis=0)
@@ -361,75 +359,121 @@ def plot_single_point_transport(
     pad = 0.1 * (hi - lo)
     xlim = (lo[0] - pad[0], hi[0] + pad[0])
     ylim = (lo[1] - pad[1], hi[1] + pad[1])
- 
-    P = model_transport_data[gamma][label]["P"]
+
+    P = np.asarray(model_transport_data[gamma][label]["P"])  # ensure plain numpy, not a JAX array
     n_tgt_P = P.shape[1]
     latent_target_P = latent_target[:n_tgt_P]
- 
-    p_y_given_x = P / P.sum(axis=1, keepdims=True)
-    expected_target = p_y_given_x @ latent_target_P  # (n_src, 2)
- 
+
     if point_index >= latent_source.shape[0]:
         raise ValueError(
             f"point_index={point_index} out of range (0 to {latent_source.shape[0] - 1})"
         )
- 
+
+    # coupling weights P(y_j | x_i) for the single highlighted source point
+    row = P[point_index]
+    weights = row / row.sum()
+
+    # barycentric projection: weighted centroid of ALL coupled target points
+    barycenter = weights @ latent_target_P  # (2,)
+
+    # pick the top-n most strongly coupled target points to actually draw,
+    # so the figure stays readable even though every target with P_ij > 0
+    # technically contributes a (typically tiny) amount
+    top_idx = np.argsort(weights)[::-1][:n_top_targets]
+    top_weights = weights[top_idx]
+    top_targets = latent_target_P[top_idx]
+
     src_pt = latent_source[point_index]
-    tgt_pt = expected_target[point_index]
- 
+
     fig, ax = plt.subplots(figsize=figsize)
- 
+
     # background clouds (faint, subsampled)
     ax.scatter(
         src_bg[:, 0], src_bg[:, 1],
         c="tab:blue", marker="o", s=point_size, alpha=alpha * 0.25,
-        edgecolors="none",
+        edgecolors="none", zorder=1,
     )
     ax.scatter(
         tgt_bg[:, 0], tgt_bg[:, 1],
         c="tab:orange", marker="o", s=point_size, alpha=alpha * 0.25,
-        edgecolors="none",
+        edgecolors="none", zorder=1,
     )
- 
-    # single transport line
-    ax.plot(
-        [src_pt[0], tgt_pt[0]],
-        [src_pt[1], tgt_pt[1]],
-        color="gray", linewidth=1.0, alpha=0.9, zorder=2,
+
+    # one line per coupled target point, opacity/width scaled by P_ij
+    w_max = float(top_weights.max()) if top_weights.max() > 0 else 1.0
+    for (tx, ty), w in zip(top_targets, top_weights):
+        rel_w = float(w) / w_max
+        ax.plot(
+            [src_pt[0], tx], [src_pt[1], ty],
+            color="gray", linewidth=0.5 + 2.5 * rel_w,
+            alpha=0.25 + 0.55 * rel_w, zorder=2,
+        )
+
+    # the coupled target points themselves, sized/shaded by weight
+    ax.scatter(
+        top_targets[:, 0], top_targets[:, 1],
+        c="tab:orange", marker="o",
+        s=target_dot_size * (0.4 + 0.6 * (top_weights / w_max)),
+        edgecolors="black", linewidths=0.6, alpha=0.9, zorder=3,
     )
- 
-    # the one highlighted source point and its barycentric projection
+
+    # the highlighted source point
     ax.scatter(
         src_pt[0], src_pt[1],
         c="tab:blue", marker="o", s=highlight_size,
-        edgecolors="black", linewidths=1.0, zorder=3,
+        edgecolors="black", linewidths=1.0, zorder=4,
     )
+
+    # the barycentric projection itself -- the P-weighted centroid, drawn
+    # distinctly to show it is NOT one of the individual target points
     ax.scatter(
-        tgt_pt[0], tgt_pt[1],
-        c="tab:orange", marker="o", s=highlight_size,
-        edgecolors="black", linewidths=1.0, zorder=3,
+        barycenter[0], barycenter[1],
+        c="tab:green", marker="*", s=barycenter_marker_size,
+        edgecolors="black", linewidths=1.0, zorder=5,
     )
- 
+
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_xlabel("")
-    ax.set_ylabel("")
-    for spine in ax.spines.values():
-        spine.set_visible(False)
- 
-    fig.patch.set_facecolor("white")
-    ax.patch.set_facecolor("white")
-    fig.tight_layout(pad=0)
- 
+    ax.set_xlabel("Dim 1", fontsize=label_fontsize)
+    ax.set_ylabel("Dim 2", fontsize=label_fontsize)
+    ax.tick_params(axis="both", labelsize=tick_fontsize)
+    ax.set_title(
+        f"Barycentric projection of a single point",
+        fontsize=title_fontsize,
+    )
+
+    legend_handles = [
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:blue",
+                   markeredgecolor="black", markersize=10, label=f"Source point $x_i^*$"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:orange",
+                   markeredgecolor="black", markersize=9,
+                   label=r"Coupled target points $y_j$"),
+        plt.Line2D([0], [0], color="gray", linewidth=2,
+                   label=r"Mass Transferred"),
+        plt.Line2D([0], [0], marker="*", color="w", markerfacecolor="tab:green",
+                   markeredgecolor="black", markersize=14,
+                   label=r"Barycentric projection $y^*$"),
+    ]
+    ax.legend(
+        handles=legend_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),
+        ncol=1,
+        frameon=False,
+        fontsize=legend_fontsize,
+    )
+
+    fig.tight_layout()
+
     if save:
-        fname = f"transport_single_point_{source_label}_to_{target_label}_gamma_{gamma:.4f}.png"
+        fname = (
+            f"barycentric_projection_explainer.png"
+        )
         plt.savefig(
             f"{save_dir}/{fname}", dpi=300, bbox_inches="tight",
-            pad_inches=0, facecolor="white",
         )
- 
+        print(f"Saved → {save_dir}/{fname}")
+
     return fig
  
 def plot_reconstruction(training_data, model, n_examples=10):
@@ -1028,79 +1072,27 @@ def plot_latent_space_dim(model, dim, x_sub, labels_sub, point_size=4, alpha=0.6
     plt.show()
 
 
-def select_best_gamma_ttest(df, gammas, alpha=0.05, verbose=True):
+def select_best_gamma_weighted(df, gammas, metric="mmd_image", w_mmd=0.9, w_iter=0.1):
     """
-    Select the preferred gamma using sequential Welch's t-tests on pooled
-    per-row mmd_latent values (pooled across all rows -- source/target pairs
-    and latent dimensions -- at each gamma).
- 
-    Walk gammas in ascending order. Start with `selected = gammas[0]`.
-    For each subsequent candidate gamma g:
-        - Run Welch's t-test between selected's pooled mmd_latent values
-          and candidate's pooled mmd_latent values.
-        - If NOT significant (p >= alpha): prefer the larger gamma
-          (no meaningful cost in MMD, so take the cheaper/larger one) ->
-          selected = g.
-        - If significant: only move to g if g's mean MMD is actually lower
-          (a real improvement) -> selected = g. Otherwise keep `selected`
-          and continue comparing future gammas against it.
- 
-    Returns
-    -------
-    selected_gamma : float
-    log : list of dict
-        One entry per pairwise comparison made, for inspection/reporting.
+    Select optimal gamma via weighted composite of normalized MMD and iter_count.
+    Lower composite score is better. w_mmd + w_iter should sum to 1.
     """
-    gammas = sorted(gammas)
-    samples = {g: df.loc[df["gamma"] == g, "mmd_image"].dropna().values for g in gammas}
- 
-    selected = gammas[0]
-    log = []
- 
-    for g in gammas[1:]:
-        a = samples[selected]
-        b = samples[g]
- 
-        if len(a) < 2 or len(b) < 2:
-            t_stat, p_val = np.nan, np.nan
-            significant = False
-        else:
-            t_stat, p_val = stats.ttest_ind(a, b, equal_var=False)  # Welch's t-test
-            significant = p_val < alpha
- 
-        mean_selected = np.mean(a) if len(a) else np.nan
-        mean_candidate = np.mean(b) if len(b) else np.nan
- 
-        if not significant:
-            decision = f"not significant (p={p_val:.4f}) -> prefer larger gamma {g}"
-            selected = g
-        else:
-            if mean_candidate < mean_selected:
-                decision = (
-                    f"significant (p={p_val:.4f}), candidate mean lower "
-                    f"({mean_candidate:.4f} < {mean_selected:.4f}) -> move to {g}"
-                )
-                selected = g
-            else:
-                decision = (
-                    f"significant (p={p_val:.4f}), candidate mean not lower "
-                    f"({mean_candidate:.4f} >= {mean_selected:.4f}) -> keep {selected}"
-                )
- 
-        log.append({
-            "candidate": g,
-            "t_stat": t_stat,
-            "p_value": p_val,
-            "significant": significant,
-            "mean_selected_before": mean_selected,
-            "mean_candidate": mean_candidate,
-            "decision": decision,
-        })
- 
-        if verbose:
-            print(f"vs γ={g}: {decision}")
- 
-    return selected, log
+    mmd_per_gamma  = np.array([df.loc[df["gamma"] == g, metric].mean()      for g in gammas])
+    iter_per_gamma = np.array([df.loc[df["gamma"] == g, "iter_count"].mean() for g in gammas])
+
+    mmd_norm  = (mmd_per_gamma  - mmd_per_gamma.min())  / (mmd_per_gamma.max()  - mmd_per_gamma.min()  + 1e-12)
+    iter_norm = (iter_per_gamma - iter_per_gamma.min()) / (iter_per_gamma.max() - iter_per_gamma.min() + 1e-12)
+
+    composite = w_mmd * mmd_norm + w_iter * iter_norm
+    best_idx  = int(np.argmin(composite))
+    best_gamma = gammas[best_idx]
+
+    print(f"Selected γ={best_gamma:.4g}  "
+          f"(MMD={mmd_per_gamma[best_idx]:.4f}, "
+          f"iters={iter_per_gamma[best_idx]:.0f}, "
+          f"composite={composite[best_idx]:.4f})")
+
+    return best_gamma, mmd_per_gamma, iter_per_gamma, composite
  
  
 def plot_mmd_vs_gamma(
@@ -1108,54 +1100,45 @@ def plot_mmd_vs_gamma(
     csv_path="data/evaluation_summary.csv",
     save_dir="figures/plots",
     save=True,
-    alpha=0.05,
+    metric="mmd_image",
 ):
     """
-    Plot latent MMD vs gamma, one line per latent dimension, with a single
-    vertical line marking the globally selected optimal gamma (via sequential
-    Welch's t-tests pooled across all dimensions and source/target pairs).
+    Clean line plot of MMD vs gamma by latent dimension, no gamma selection marker.
     """
     if df is None:
         df = pd.read_csv(csv_path)
     os.makedirs(save_dir, exist_ok=True)
     gammas = sorted(df["gamma"].unique())
     dims = sorted(df["latent_dim"].unique())
- 
-    best_gamma, ttest_log = select_best_gamma_ttest(df, gammas, alpha=alpha)
-    best_mmd_pooled = df.loc[df["gamma"] == best_gamma, "mmd_image"].mean()
- 
+
     _, ax = plt.subplots(figsize=(9, 6))
     cmap = plt.cm.viridis(np.linspace(0, 1, len(dims)))
- 
+
     for color, d in zip(cmap, dims):
         sub = df[df["latent_dim"] == d]
-        means = [sub.loc[sub["gamma"] == g, "mmd_image"].mean() for g in gammas]
+        means = [sub.loc[sub["gamma"] == g, metric].mean() for g in gammas]
         ax.plot(
             gammas, means,
             "o-", linewidth=2, markersize=5,
             color=color, alpha=0.9,
             label=f"latent_dim={d}",
         )
- 
-    ax.axvline(
-        best_gamma, color="tomato", linestyle="--", linewidth=1.8, zorder=4,
-        label=f"selected γ={best_gamma:.4g} (t-test, α={alpha})",
-    )
- 
+
+
+
     ax.set_xscale("log")
     ax.set_xlabel(r"$\gamma$", fontsize=13)
-    ax.set_ylabel("Image MMD", fontsize=13)
-    ax.set_title(r"Image MMD vs $\gamma$ by Latent Dimension", fontsize=14)
+    ax.set_ylabel(metric.replace("_", " ").title(), fontsize=13)
+    ax.set_title(rf"Image MMD vs $\gamma$ by Latent Dimension", fontsize=14)
     ax.grid(True, alpha=0.3)
     ax.legend()
     plt.tight_layout()
- 
+
     fname = "mmd_vs_gamma_by_dim.png"
-    print(f"Selected γ: {best_gamma:.4g}  ->  pooled mean MMD = {best_mmd_pooled:.4f}")
- 
     if save:
         plt.savefig(f"{save_dir}/{fname}", dpi=300, bbox_inches="tight")
     plt.show()
+
  
 
 def plot_interpolation_paths_across_dims(
@@ -1793,25 +1776,31 @@ def fig_1_plot_boxplot_mmd_per_gamma(summary_df, save_dir="figures/rapport"):
     print(f"Figure saved to: {save_path}")
 
 if __name__ == "__main__":
-    summary_df = pd.read_csv("data/evaluation_summary.csv")
+    df = pd.read_csv("data/evaluation_summary2.csv")
+    # print(len(df))
+    # gammas = sorted(df["gamma"].unique())
+    # best_gamma, log = select_best_gamma_ttest(df, gammas, metric="mmd_latent", alpha=0.2)
+    # print(best_gamma)
 
 
 
     training_data,_ = getData()
     model = load_with_hyperparams("ae_best_model_bo_2")
+    plot_barycentric_projection_explainer(training_data,model,4,6,0.001)
+    table_mmd_image_vs_gamma(summary_df=df)
 
-    plot_single_point_transport(
-    training_data,
-    model,
-    2,
-    6,
-    0.001)
-    plot_barycentric_geometry_vs_gamma_dim2(training_data,model=model,source_label=0,target_label=1)
+    # plot_single_point_transport(
+    # training_data,
+    # model,
+    # 2,
+    # 6,
+    # 0.001)
+    # plot_barycentric_geometry_vs_gamma_dim2(training_data,model=model,source_label=0,target_label=1)
     # pca_visualize_for_high_dimension(training_data,model=load_with_hyperparams("ae_best_model_bo_4"))
     # plot_mmd_vs_gamma(df=summary_df)
     # fig_0_plot_barycentric_blurring_effect(summary_df=summary_df)
     # fig_1_plot_boxplot_mmd_per_gamma(summary_df=summary_df)
-    # fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
+    fig_2_dim_vs_gamma_metrics_table(summary_df=df)
     # fig_3_plot_mmd_heatmaps_individual(summary_df=summary_df)
     # fig_4_plot_gamma_vs_mmd(summary_df=summary_df)
     # fig_2_dim_vs_gamma_metrics_table(summary_df=summary_df)
