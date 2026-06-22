@@ -585,20 +585,22 @@ def plot_training_loss(data):
 
 def fig_2_dim_vs_gamma_metrics_table(summary_df):
     latent_dims = sorted(summary_df["latent_dim"].unique())
-    
-    evaluation_metrics =["entropy", "wasserstein_distance_latent", "mmd_latent", "mmd_image", "classifier_confidence_image", ]
+
+    evaluation_metrics = ["entropy", "wasserstein_distance_latent", "mmd_latent", "mmd_image", "classifier_confidence_image"]
+    col_names = ["Entropy Of P", "Latent Wasserstein Distance", "Latent MMD", "Image MMD", "Image Classifier Probability"]
 
     rows = []
     for dim in latent_dims:
         row = []
         for metric in evaluation_metrics:
-
             mask = (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == OPTIMAL_GAMMA)
-            metric_value = summary_df.loc[mask, metric].mean()
-            row.append(f"{metric_value:.4f}")
+            values = summary_df.loc[mask, metric].dropna().values
+            mean = np.mean(values)
+            ci = 1.96 * np.std(values, ddof=1) / np.sqrt(len(values)) if len(values) > 1 else 0.0
+            row.append(f"{mean} ± {ci}")
         rows.append(row)
 
-    figure_3_df = pd.DataFrame(data=rows, columns= ["Entropy Of P", "Latent Wasserstein Distance","Latent MMD" , "Image MMD","Image Classifier Probability"],  index=latent_dims)
+    figure_3_df = pd.DataFrame(data=rows, columns=col_names, index=latent_dims)
     figure_3_df.index.name = "Latent Dimension"
 
     print(figure_3_df.to_latex())
@@ -1238,7 +1240,7 @@ def plot_interpolation_paths_across_dims(
     n_cols = len(fractions) + 1  # source + fractions (t=1.0 is already transported)
     actual_n = min(n, source_imgs.shape[0])
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 1.3, n_rows * 1.3))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 1.3, n_rows * 1.3), squeeze=False)
     fig.subplots_adjust(left=0.15, right=0.98, top=0.96, bottom=0.05)
 
     col_labels = (
@@ -1369,7 +1371,7 @@ def plot_reconstruction_for_all_dim(save = False):
         axes[row, 0].set_ylabel(f"dim={dim}", fontsize=10)
 
     plt.tight_layout()
-    if save: 
+    if save:
         plt.savefig("figures/all_dim_reconstruction.png", dpi=150, bbox_inches="tight")
     plt.show()
 
@@ -1580,6 +1582,163 @@ def plot_boxplot_time_iteration_per_latent_dim(summary_df, save_dir="figures/box
     plt.close(fig)
     print(f"Figure saved to: {save_path}")
 
+def plot_gamma_vs_iterations_and_mmd(summary_df, save_dir="figures/rapport"):
+    os.makedirs(save_dir, exist_ok=True)
+
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+    gammas = sorted(summary_df["gamma"].unique())
+
+    prop_cycle = plt.rcParams["axes.prop_cycle"]
+    colors = [c["color"] for c in prop_cycle]
+
+    fig, ax_iter = plt.subplots(figsize=(9, 5))
+    ax_mmd = ax_iter.twinx()
+
+    def get_means_ci(dim, metric):
+        means, lowers, uppers = [], [], []
+        for gamma in gammas:
+            values = summary_df.loc[
+                (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == gamma), metric
+            ].values
+            if len(values) == 0:
+                means.append(np.nan); lowers.append(np.nan); uppers.append(np.nan)
+                continue
+            mean = np.mean(values)
+            ci = 1.96 * np.std(values, ddof=1) / np.sqrt(len(values)) if len(values) > 1 else 0
+            means.append(mean); lowers.append(mean - ci); uppers.append(mean + ci)
+        return np.array(means), np.array(lowers), np.array(uppers)
+
+    for i, dim in enumerate(latent_dims):
+        color = colors[i % len(colors)]
+
+        means, lowers, uppers = get_means_ci(dim, "iter_count")
+        ax_iter.plot(gammas, means, color=color, linestyle="-", marker="o",
+                     linewidth=2, label=f"dim={dim}")
+        ax_iter.fill_between(gammas, lowers, uppers, color=color, alpha=0.12)
+
+        means, lowers, uppers = get_means_ci(dim, "mmd_latent")
+        ax_mmd.plot(gammas, means, color=color, linestyle="--", marker="s",
+                    linewidth=1.5)
+        ax_mmd.fill_between(gammas, lowers, uppers, color=color, alpha=0.08)
+
+    ax_iter.set_xscale("log")
+    ax_iter.set_xlabel(r"$\gamma$")
+    ax_iter.set_ylabel("Mean iteration count")
+    ax_mmd.set_ylabel("Mean latent MMD")
+    ax_iter.set_title("Sinkhorn iterations (—) and latent MMD (- -) vs γ")
+    ax_iter.grid(True, alpha=0.3)
+
+    ax_iter.legend(title="Latent Dim", bbox_to_anchor=(1.12, 1), loc="upper left")
+
+    plt.tight_layout()
+    save_path = f"{save_dir}/gamma_vs_iterations_and_mmd.png"
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Figure saved to: {save_path}")
+
+
+def plot_gamma_vs_iterations_and_mmd_mean(summary_df, save_dir="figures/rapport"):
+    """Same dual-axis plot as plot_gamma_vs_iterations_and_mmd but averaged over all latent dims."""
+    os.makedirs(save_dir, exist_ok=True)
+
+    gammas = sorted(summary_df["gamma"].unique())
+
+    fig, ax_iter = plt.subplots(figsize=(8, 5))
+    ax_mmd = ax_iter.twinx()
+
+    def get_means_ci(metric):
+        means, lowers, uppers = [], [], []
+        for gamma in gammas:
+            values = summary_df.loc[summary_df["gamma"] == gamma, metric].values
+            if len(values) == 0:
+                means.append(np.nan); lowers.append(np.nan); uppers.append(np.nan)
+                continue
+            mean = np.mean(values)
+            ci = 1.96 * np.std(values, ddof=1) / np.sqrt(len(values)) if len(values) > 1 else 0
+            means.append(mean); lowers.append(mean - ci); uppers.append(mean + ci)
+        return np.array(means), np.array(lowers), np.array(uppers)
+
+    means, lowers, uppers = get_means_ci("iter_count")
+    ax_iter.plot(gammas, means, color="tab:blue", linestyle="-", marker="o",
+                 linewidth=2, label="Iterations")
+    ax_iter.fill_between(gammas, lowers, uppers, color="tab:blue", alpha=0.15)
+
+    means, lowers, uppers = get_means_ci("mmd_latent")
+    ax_mmd.plot(gammas, means, color="tab:orange", linestyle="--", marker="s",
+                linewidth=2, label="Latent MMD")
+    ax_mmd.fill_between(gammas, lowers, uppers, color="tab:orange", alpha=0.12)
+
+    ax_iter.set_xscale("log")
+    ax_iter.set_xlabel(r"$\gamma$")
+    ax_iter.set_ylabel("Mean iteration count", color="tab:blue")
+    ax_iter.tick_params(axis="y", labelcolor="tab:blue")
+    ax_mmd.set_ylabel("Mean latent MMD", color="tab:orange")
+    ax_mmd.tick_params(axis="y", labelcolor="tab:orange")
+    ax_iter.set_title("Sinkhorn iterations (—) and latent MMD (- -) vs γ\n(mean over all latent dims and digit pairs)")
+    ax_iter.grid(True, alpha=0.3)
+
+    lines1, labels1 = ax_iter.get_legend_handles_labels()
+    lines2, labels2 = ax_mmd.get_legend_handles_labels()
+    ax_iter.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
+
+    plt.tight_layout()
+    save_path = f"{save_dir}/gamma_vs_iterations_and_mmd_mean.png"
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Figure saved to: {save_path}")
+
+
+def plot_gamma_vs_iterations(summary_df, save_dir="figures/rapport"):
+    os.makedirs(save_dir, exist_ok=True)
+
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+    gammas = sorted(summary_df["gamma"].unique())
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    for metric, ax, ylabel, panel_title in [
+        ("iter_count",   axes[0], "Mean iteration count",  "(A) Iterations vs γ"),
+        ("running_time", axes[1], "Mean running time (s)", "(B) Running time vs γ"),
+    ]:
+        for dim in latent_dims:
+            means, lowers, uppers = [], [], []
+
+            for gamma in gammas:
+                values = summary_df.loc[
+                    (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == gamma), metric
+                ].values
+
+                if len(values) == 0:
+                    means.append(np.nan); lowers.append(np.nan); uppers.append(np.nan)
+                    continue
+
+                mean = np.mean(values)
+                ci = 1.96 * np.std(values, ddof=1) / np.sqrt(len(values)) if len(values) > 1 else 0
+                means.append(mean); lowers.append(mean - ci); uppers.append(mean + ci)
+
+            means = np.array(means)
+            lowers = np.array(lowers)
+            uppers = np.array(uppers)
+
+            line, = ax.plot(gammas, means, marker="o", linewidth=2, label=f"dim={dim}")
+            ax.fill_between(gammas, lowers, uppers, alpha=0.15, color=line.get_color())
+
+        ax.set_xscale("log")
+        ax.set_xlabel(r"$\gamma$")
+        ax.set_ylabel(ylabel)
+        ax.set_title(panel_title)
+        ax.grid(True, alpha=0.3)
+        ax.legend(title="Latent Dim", bbox_to_anchor=(1.02, 1))
+
+    fig.suptitle("Sinkhorn convergence by regularisation strength", fontsize=13)
+    plt.tight_layout()
+
+    save_path = f"{save_dir}/gamma_vs_iterations.png"
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Figure saved to: {save_path}")
+
+
 def fig_0_plot_barycentric_blurring_effect(summary_df, save_dir="figures/rapport", save=True):
     os.makedirs(save_dir, exist_ok=True)
 
@@ -1714,6 +1873,47 @@ def fig_0_plot_barycentric_blurring_effect(summary_df, save_dir="figures/rapport
 #     plt.show()
 
 
+def plot_gamma_vs_classifier_confidence(summary_df, save_dir="figures/rapport", save=True):
+    os.makedirs(save_dir, exist_ok=True)
+
+    gammas = sorted(summary_df["gamma"].unique())
+    latent_dims = sorted(summary_df["latent_dim"].unique())
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+
+    def _ci(vals):
+        vals = np.array([float(v) for v in vals])
+        mean = np.mean(vals)
+        ci = 1.96 * np.std(vals, ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0.0
+        return mean, mean - ci, mean + ci
+
+    for dim in latent_dims:
+        means, lowers, uppers = [], [], []
+        for g in gammas:
+            vals = summary_df.loc[
+                (summary_df["latent_dim"] == dim) & (summary_df["gamma"] == g),
+                "classifier_confidence_image",
+            ].values
+            m, lo, hi = _ci(vals)
+            means.append(m); lowers.append(lo); uppers.append(hi)
+        means, lowers, uppers = np.array(means), np.array(lowers), np.array(uppers)
+        line, = ax.plot(gammas, means, marker="o", linewidth=2, label=f"dim={dim}")
+        ax.fill_between(gammas, lowers, uppers, alpha=0.12, color=line.get_color())
+
+    ax.set_xscale("log")
+    ax.set_xlabel(r"$\gamma$", fontsize=12)
+    ax.set_ylabel("Classifier confidence (target class)", fontsize=11)
+    ax.set_title("Image Classifier Probability vs " + r"$\gamma$", fontsize=13)
+    ax.legend(title="Latent dim", fontsize=9, frameon=False)
+
+    plt.tight_layout()
+    if save:
+        path = os.path.join(save_dir, "gamma_vs_classifier_confidence.png")
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        print(f"Saved → {path}")
+    plt.show()
+
+
 from matplotlib.lines import Line2D
 def fig_1_plot_boxplot_mmd_per_gamma(summary_df, save_dir="figures/rapport"):
     os.makedirs(save_dir, exist_ok=True)
@@ -1774,6 +1974,64 @@ def fig_1_plot_boxplot_mmd_per_gamma(summary_df, save_dir="figures/rapport"):
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Figure saved to: {save_path}")
+
+def fig_6_transport_grid(
+    dim=10,
+    gamma=OPTIMAL_GAMMA,
+    example_idx=0,
+    save=True,
+    save_dir="figures/rapport",
+):
+    pkl_path = f"data/ae_best_model_bo_{dim}_ot_data.pkl"
+    with open(pkl_path, "rb") as f:
+        ot_data = pickle.load(f)
+
+    if gamma not in ot_data:
+        raise ValueError(f"gamma={gamma} not found in pickle. Available: {list(ot_data.keys())}")
+
+    gamma_data = ot_data[gamma]
+    n = len(LABELS)
+
+    fig, axes = plt.subplots(n, n, figsize=(n * 1.2, n * 1.2), squeeze=False)
+
+    for r, src in enumerate(LABELS):
+        for c, tgt in enumerate(LABELS):
+            ax = axes[r, c]
+            if src == tgt:
+                ax.set_facecolor("#dddddd")
+                ax.axis("off")
+                continue
+
+            key = f"source_{src}_target_{tgt}"
+            if key not in gamma_data:
+                ax.axis("off")
+                continue
+
+            img = gamma_data[key]["expected_target_images"][example_idx].reshape(28, 28)
+            ax.imshow(img, cmap="gray", vmin=0, vmax=1)
+            ax.axis("off")
+
+    for i, label in enumerate(LABELS):
+        axes[0, i].set_title(str(label), fontsize=20)
+
+    fig.text(0.5, 0.98, "Target", ha="center", fontsize=25)
+    plt.tight_layout(rect=[0.06, 0, 1, 0.97])
+
+    for i, label in enumerate(LABELS):
+        ax = axes[i, 0]
+        x = ax.get_position().x0
+        y = (ax.get_position().y0 + ax.get_position().y1) / 2
+        fig.text(x - 0.01, y, str(label), ha="right", va="center", fontsize=20)
+
+    fig.text(0.01, 0.5, "Source", va="center", rotation="vertical", fontsize=25)
+
+    if save:
+        os.makedirs(save_dir, exist_ok=True)
+        path = f"{save_dir}/fig_6_transport_grid_dim_{dim}_gamma_{gamma}.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        print(f"Saved → {path}")
+    plt.show()
+
 
 if __name__ == "__main__":
     df = pd.read_csv("data/evaluation_summary2.csv")
